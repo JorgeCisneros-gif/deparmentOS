@@ -1,0 +1,46 @@
+Metadata-Version: 2.1
+Name: py-namethatcolor
+Version: 0.1.0
+Summary: A small tool to get the closest known color to any given one and also generates its general shade (like Blue, Red, Black, etc)
+Home-page: https://github.com/marazmiki/py-namethatcolor
+License: MIT
+Author: Mikhail Porokhovnichenko
+Author-email: marazmiki@gmail.com
+Requires-Python: >=3.10,<4.0
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Project-URL: Repository, https://github.com/marazmiki/py-namethatcolor
+Description-Content-Type: text/x-rst
+
+py-namethatcolor
+================
+
+
+About
+-----
+
+The script allows to get the closest known color to any given one and also generates its general shade (like Blue, Red, Black, etc)
+
+.. code ::
+
+    >>> from py_namethatcolor import get_color
+    >>> color = get_color("#336699")
+    >>> color.name
+    'Lochmara'
+    >>> color.shade.name
+    'Blue'
+
+
+Credits
+-------
+
+It's a Python port of the "`Name that Color <https://chir.ag/projects/name-that-color/#6195ED>`_"
+script that was originally written by Chirag Mehta and also its improved
+version developed for "`Color Name & Hue <https://www.color-blindness.com/color-name-hue/>`_"
+by Daniel Flueck
+

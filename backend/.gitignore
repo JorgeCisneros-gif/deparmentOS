@@ -1,0 +1,23 @@
+.env
+.env.local
+.env.production
+
+# Dependencias
+node_modules/
+__pycache__/
+*.pyc
+
+# Build del frontend
+frontend/dist/
+frontend/build/
+
+# Uploads de imágenes (pueden pesar mucho)
+backend/uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

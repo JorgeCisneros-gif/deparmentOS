@@ -1,0 +1,1 @@
+//# sourceMappingURL=receipts-period.patch.js.map

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//mnt/c/proyectos/**)",
+      "Bash(docker compose *)",
+      "Bash(dir \"C:\\\\proyectos\\\\LectorImagen\\\\image\" /s /b)",
+      "PowerShell(curl.exe -s -X POST http://localhost:8000/ocr -F \"file=@C:\\\\proyectos\\\\LectorImagen\\\\20-04-2026\\\\201\")",
+      "PowerShell(Get-ChildItem \"C:\\\\proyectos\\\\LectorImagen\\\\\" | Where-Object { $_.PSIsContainer -or $_.Extension -match '\\\\.\\(jpg|jpeg|png|bmp\\)' })",
+      "PowerShell(curl.exe -s -X POST http://localhost:8000/ocr -F \"file=@C:\\\\proyectos\\\\LectorImagen\\\\imagen\\\\20-04-2026\\\\201.jpeg\")",
+      "PowerShell(curl.exe -s -X POST http://localhost:8000/ocr -F \"file=@C:\\\\proyectos\\\\LectorImagen\\\\imagen\\\\20-04-2026\\\\202.jpeg\")",
+      "PowerShell(docker exec ocr-digit-api python -c \"import cv2; img=cv2.imread\\('/tmp/r.jpg'\\); print\\(img.shape\\)\" 2>$null)",
+      "PowerShell(docker cp C:\\\\proyectos\\\\LectorImagen\\\\recorte_302.jpeg ocr-digit-api:/tmp/r.jpg)",
+      "PowerShell(docker exec ocr-digit-api python -c \"import cv2; img=cv2.imread\\('/tmp/r.jpg'\\); print\\('size:', img.shape[1], 'x', img.shape[0]\\)\")",
+      "Bash(docker-compose up *)"
+    ]
+  }
+}

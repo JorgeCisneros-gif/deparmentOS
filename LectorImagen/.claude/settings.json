@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(curl.exe -s -X POST http://localhost:8000/ocr -F \"file=@C:\\\\proyectos\\\\LectorImagen\\\\imagen\\\\20-04-2026\\\\201.jpeg\")",
+      "PowerShell(curl.exe -s -X POST http://localhost:8000/ocr -F \"file=@C:\\\\proyectos\\\\LectorImagen\\\\imagen\\\\20-04-2026\\\\202.jpeg\")"
+    ]
+  }
+}
