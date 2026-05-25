@@ -24,7 +24,7 @@ interface Medicion {
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || ''
 
 export default function MedicionesPage() {
   const [depts, setDepts]             = useState<Department[]>([])

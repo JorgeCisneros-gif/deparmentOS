@@ -53,7 +53,7 @@ export default function NewReadingPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const { fmt } = useTz()
-  const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || 'http://localhost:3000'
+  const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || ''
 
   useEffect(() => { api.get('/buildings').then(r => setBuildings(r.data)) }, [])
 
@@ -709,7 +709,7 @@ function MeterImageThumb({ meterImageId, apiBase }: { meterImageId: string; apiB
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => {
     api.get(`/readings/meter-image/${meterImageId}`)
-      .then(({ data }) => { if (data?.filename) setSrc(`${apiBase}/uploads/meters/${data.filename}`) })
+      .then(({ data }) => { if (data?.filename) setSrc(`/uploads/meters/${data.filename}`) })
       .catch(() => {})
   }, [meterImageId])
   if (!src) return null

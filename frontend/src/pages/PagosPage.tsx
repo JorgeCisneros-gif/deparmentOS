@@ -58,7 +58,7 @@ const TIPO_COLOR: Record<string, string> = {
   limpieza: '#a78bfa', mantenimiento: '#fb923c', otro: '#94a3b8', ajuste: '#94a3b8',
 }
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || ''
 
 // ── Componente principal ──────────────────────────────────────
 

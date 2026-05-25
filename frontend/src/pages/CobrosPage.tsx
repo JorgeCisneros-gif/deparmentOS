@@ -534,7 +534,7 @@ function PagoModal({ depto, onClose, onSaved }: any) {
 function VerificarPagoModal({ depto, pago, onClose, onAprobar, onRechazar }: any) {
   const [zoomImg, setZoomImg] = useState<string | null>(null)
   const [acting, setActing]   = useState(false)
-  const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || 'http://localhost:3000'
+  const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || ''
   const buildComprobanteUrl = (path: string | undefined) => {
     if (!path) return null
     // Si ya es URL completa
