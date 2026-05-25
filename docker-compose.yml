@@ -53,7 +53,7 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - uploads_data:/app/uploads
+      - ./uploads:/app/uploads
     depends_on:
       edify_db:
         condition: service_healthy
@@ -118,11 +118,10 @@ services:
       - edify_network
 
 # ── Volúmenes persistentes ──────────────────────────────────
+# uploads ya no es volumen Docker — es bind mount en ./uploads/
 volumes:
   edify_data:
     name: edify_core_data
-  uploads_data:
-    name: edify_uploads
 
 # ── Red interna ─────────────────────────────────────────────
 networks:
