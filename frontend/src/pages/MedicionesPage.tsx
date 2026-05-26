@@ -250,7 +250,7 @@ function MeterImageCell({ deptoId, periodoMes, periodoAnio, onZoom }: {
       })
       .then(res => {
         if (res?.data?.filename) {
-          const base = import.meta.env.VITE_API_URL?.replace('/api/v1','') || 'http://localhost:3000'
+          const base = import.meta.env.VITE_API_URL?.replace('/api/v1','') || ''
           setImgUrl(`${base}/uploads/meters/${res.data.filename}`)
         }
       })
