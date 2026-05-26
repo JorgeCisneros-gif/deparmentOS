@@ -136,7 +136,7 @@ services:
     volumes:
       - uptime_data:/app/data
     ports:
-      - "127.0.0.1:3002:3001"
+      - "3002:3001"
     networks:
       - edify_network
 
