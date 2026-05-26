@@ -128,13 +128,25 @@ services:
     networks:
       - edify_network
 
-
+  # ── Uptime Kuma (monitoreo — solo red local) ────────────────
+  uptime_kuma:
+    image: louislam/uptime-kuma:1
+    container_name: edify_uptime
+    restart: unless-stopped
+    volumes:
+      - uptime_data:/app/data
+    ports:
+      - "127.0.0.1:3002:3001"
+    networks:
+      - edify_network
 
 # ── Volúmenes persistentes ──────────────────────────────────
 # uploads ya no es volumen Docker — es bind mount en ./uploads/
 volumes:
   edify_data:
     name: edify_core_data
+  uptime_data:
+    name: edify_uptime_data
 
 # ── Red interna ─────────────────────────────────────────────
 networks:
