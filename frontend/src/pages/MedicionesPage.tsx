@@ -230,36 +230,34 @@ export default function MedicionesPage() {
 function MeterImageCell({ deptoId, periodoMes, periodoAnio, onZoom }: {
   deptoId: string; periodoMes: number; periodoAnio: number; onZoom: (url: string) => void
 }) {
-  const [imgUrl, setImgUrl]     = useState<string | null>(null)
-  const [loading, setLoading]   = useState(true)
+  const [imgUrl, setImgUrl]   = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true); setImgUrl(null)
-    // Buscar la medición del período para obtener el meterImageId
     api.get('/readings', { params: { deptId: deptoId } })
       .then(({ data }) => {
-        // Filtrar por período
         const reading = data.find((r: any) => {
           const recibo = r.recibo
-          return recibo && parseInt(recibo.periodoMes) === periodoMes && parseInt(recibo.periodoAnio) === periodoAnio
+          return recibo &&
+            parseInt(recibo.periodoMes)  === periodoMes &&
+            parseInt(recibo.periodoAnio) === periodoAnio
         })
-        if (reading?.idMeterImage) {
-          return api.get(`/readings/meter-image/${reading.idMeterImage}`)
-        }
-        return null
-      })
-      .then(res => {
-        if (res?.data?.filename) {
-          const base = import.meta.env.VITE_API_URL?.replace('/api/v1','') || ''
-          setImgUrl(`${base}/uploads/meters/${res.data.filename}`)
+        // ✅ Usar imagenFilename directamente — ya viene en la respuesta
+        if (reading?.imagenFilename) {
+          setImgUrl(`/uploads/meters/${reading.imagenFilename}`)
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [deptoId, periodoMes, periodoAnio])
 
-  if (loading) return <div style={{ width:44,height:44,background:'var(--bg-elevated)',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center' }}><Loader2 size={12} color="var(--text-muted)" style={{ animation:'spin 0.8s linear infinite' }}/></div>
-  if (!imgUrl)  return <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>
+  if (loading) return (
+    <div style={{ width:44,height:44,background:'var(--bg-elevated)',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center' }}>
+      <Loader2 size={12} color="var(--text-muted)" style={{ animation:'spin 0.8s linear infinite' }}/>
+    </div>
+  )
+  if (!imgUrl) return <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>
 
   return (
     <button onClick={() => onZoom(imgUrl)}
