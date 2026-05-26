@@ -1,0 +1,35 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy al servidor
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/apps/deparmentOS
+
+            echo "── Pull últimos cambios ──"
+            git pull origin main
+
+            echo "── Rebuild servicios modificados ──"
+            docker compose up --build -d
+
+            echo "── Estado final ──"
+            docker compose ps
+
+            echo "✅ Deploy completado $(date)"
