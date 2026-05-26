@@ -116,6 +116,19 @@ services:
       - frontend
     networks:
       - edify_network
+  # ── Landing SuiteOS ─────────────────────────────────────────
+  suite_landing:
+    image: nginx:alpine
+    container_name: suite_landing
+    restart: unless-stopped
+    volumes:
+      - /home/jorge/apps/deparmentOS/suite-os:/usr/share/nginx/html:ro
+    ports:
+      - "8080:80"
+    networks:
+      - edify_network
+
+
 
 # ── Volúmenes persistentes ──────────────────────────────────
 # uploads ya no es volumen Docker — es bind mount en ./uploads/
