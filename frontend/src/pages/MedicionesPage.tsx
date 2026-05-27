@@ -4,27 +4,26 @@ import api from '../services/api'
 import { useTz } from '../store/timezone.store'
 import toast from 'react-hot-toast'
 import {
-  Droplets, ChevronLeft, ChevronRight, Loader2,
+  Droplets, Loader2,
   RefreshCw, ZoomIn, X, TrendingUp, TrendingDown, Minus,
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
 
-interface Building    { id: string; nombre: string }
-interface Department  { id: string; nrDepartamento: string }
+interface Department { id: string; nrDepartamento: string }
+
 interface Medicion {
-  anio:            number
-  mes:             number
+  anio:             number
+  mes:              number
   lectura_anterior: number
   lectura_actual:   number
   m3_consumido:     number
   monto_calculado:  number
   precio_m3:        number
+  imagenFilename?:  string   // ← viene del backend en el historial
 }
 
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
-
-const API_BASE = import.meta.env.VITE_API_URL?.replace('/api/v1','') || ''
 
 export default function MedicionesPage() {
   const [depts, setDepts]             = useState<Department[]>([])
@@ -34,7 +33,6 @@ export default function MedicionesPage() {
   const [loading, setLoading]         = useState(false)
   const { fmt } = useTz()
   const [zoomImg, setZoomImg]         = useState<string | null>(null)
-  const [meterImgs, setMeterImgs]     = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!selBuilding) return
@@ -60,7 +58,6 @@ export default function MedicionesPage() {
     } finally { setLoading(false) }
   }, [selDepto])
 
-  // Cálculo de tendencia entre mediciones
   const getTrend = (idx: number): 'up' | 'down' | 'equal' | null => {
     if (idx >= mediciones.length - 1) return null
     const curr = parseFloat(String(mediciones[idx].m3_consumido))
@@ -107,11 +104,11 @@ export default function MedicionesPage() {
       {mediciones.length > 0 && (
         <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'0.75rem',marginBottom:'1.5rem' }} className="fade-up">
           {[
-            { label:'Períodos registrados', value: mediciones.length,            color:'var(--blue)',    suffix:'' },
-            { label:'Total consumido',       value: totalM3.toFixed(3),           color:'var(--accent)', suffix:' m³' },
-            { label:'Promedio mensual',       value: promedioM3.toFixed(3),        color:'var(--green)',  suffix:' m³' },
-            { label:'Pico máximo',            value: maxM3.toFixed(3),             color:'#f87171',      suffix:' m³' },
-            { label:'Total facturado',        value: `S/. ${totalMonto.toFixed(2)}`,color:'var(--accent)',suffix:'' },
+            { label:'Períodos registrados', value: mediciones.length,             color:'var(--blue)',    suffix:'' },
+            { label:'Total consumido',       value: totalM3.toFixed(3),            color:'var(--accent)', suffix:' m³' },
+            { label:'Promedio mensual',      value: promedioM3.toFixed(3),         color:'var(--green)',  suffix:' m³' },
+            { label:'Pico máximo',           value: maxM3.toFixed(3),              color:'#f87171',       suffix:' m³' },
+            { label:'Total facturado',       value: `S/. ${totalMonto.toFixed(2)}`,color:'var(--accent)', suffix:'' },
           ].map(stat => (
             <div key={stat.label} style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'0.9rem 1rem',borderTop:`2px solid ${stat.color}` }}>
               <p style={{ fontSize:'0.68rem',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',marginBottom:'0.3rem' }}>{stat.label}</p>
@@ -143,33 +140,31 @@ export default function MedicionesPage() {
             </thead>
             <tbody>
               {mediciones.map((m, i) => {
-                const trend   = getTrend(i)
-                const m3      = parseFloat(String(m.m3_consumido || 0))
-                const monto   = parseFloat(String(m.monto_calculado || 0))
-                const precio  = parseFloat(String(m.precio_m3 || 0))
-                const la      = parseFloat(String(m.lectura_anterior || 0))
-                const lact    = parseFloat(String(m.lectura_actual || 0))
-                // Barra de consumo relativa al máximo
-                const barPct  = maxM3 > 0 ? (m3 / maxM3) * 100 : 0
+                const trend  = getTrend(i)
+                const m3     = parseFloat(String(m.m3_consumido || 0))
+                const monto  = parseFloat(String(m.monto_calculado || 0))
+                const precio = parseFloat(String(m.precio_m3 || 0))
+                const la     = parseFloat(String(m.lectura_anterior || 0))
+                const lact   = parseFloat(String(m.lectura_actual || 0))
+                const barPct = maxM3 > 0 ? (m3 / maxM3) * 100 : 0
+                // URL de imagen directo desde el campo del historial
+                const imgUrl = m.imagenFilename ? `/uploads/meters/${m.imagenFilename}` : null
 
                 return (
                   <tr key={i} style={{ ...(i%2!==0?{background:'rgba(255,255,255,0.02)'}:{}) }}>
-                    {/* Período */}
+
                     <td style={s.td}>
                       <div style={{ fontWeight:600 }}>{MESES[m.mes]} {m.anio}</div>
                     </td>
 
-                    {/* Lectura anterior */}
                     <td style={{ ...s.td, fontFamily:'monospace', color:'var(--text-muted)' }}>
                       {la.toFixed(3)}
                     </td>
 
-                    {/* Lectura actual */}
                     <td style={{ ...s.td, fontFamily:'monospace', fontWeight:600 }}>
                       {lact.toFixed(3)}
                     </td>
 
-                    {/* Consumo con barra */}
                     <td style={s.td}>
                       <div style={{ display:'flex',alignItems:'center',gap:'0.6rem' }}>
                         <span style={{ fontFamily:'monospace',fontWeight:700,color:'var(--blue)',fontVariantNumeric:'tabular-nums',minWidth:60 }}>
@@ -181,17 +176,14 @@ export default function MedicionesPage() {
                       </div>
                     </td>
 
-                    {/* Precio/m³ */}
                     <td style={{ ...s.td, color:'var(--text-muted)', fontFamily:'monospace', fontSize:'0.8rem' }}>
                       S/. {precio.toFixed(4)}
                     </td>
 
-                    {/* Monto */}
                     <td style={{ ...s.td, fontWeight:700, color:'var(--accent)', fontVariantNumeric:'tabular-nums' }}>
                       S/. {monto.toFixed(2)}
                     </td>
 
-                    {/* Tendencia */}
                     <td style={s.td}>
                       {trend === 'up'    && <span style={{ display:'flex',alignItems:'center',gap:'0.25rem',color:'#f87171',fontSize:'0.78rem',fontWeight:600 }}><TrendingUp  size={14}/> Sube</span>}
                       {trend === 'down'  && <span style={{ display:'flex',alignItems:'center',gap:'0.25rem',color:'var(--green)',fontSize:'0.78rem',fontWeight:600 }}><TrendingDown size={14}/> Baja</span>}
@@ -199,10 +191,24 @@ export default function MedicionesPage() {
                       {trend === null    && <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>}
                     </td>
 
-                    {/* Imagen */}
+                    {/* Imagen — directo desde imagenFilename del historial, sin llamada extra */}
                     <td style={s.td}>
-                      <MeterImageCell deptoId={selDepto} periodoMes={m.mes} periodoAnio={m.anio} onZoom={setZoomImg} />
+                      {imgUrl ? (
+                        <button onClick={() => setZoomImg(imgUrl)}
+                          style={{ position:'relative',width:44,height:44,borderRadius:6,overflow:'hidden',border:'1px solid var(--border)',cursor:'pointer',background:'var(--bg-elevated)',display:'flex',alignItems:'center',justifyContent:'center',padding:0 }}>
+                          <img src={imgUrl} alt="medidor" style={{ width:'100%',height:'100%',objectFit:'cover' }}
+                            onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
+                          <div style={{ position:'absolute',inset:0,background:'rgba(0,0,0,0)',display:'flex',alignItems:'center',justifyContent:'center',transition:'background 0.15s' }}
+                            onMouseEnter={e => (e.currentTarget.style.background='rgba(0,0,0,0.4)')}
+                            onMouseLeave={e => (e.currentTarget.style.background='rgba(0,0,0,0)')}>
+                            <ZoomIn size={13} color="#fff" style={{ opacity:0.8 }} />
+                          </div>
+                        </button>
+                      ) : (
+                        <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>
+                      )}
                     </td>
+
                   </tr>
                 )
               })}
@@ -222,54 +228,6 @@ export default function MedicionesPage() {
         </div>
       )}
     </div>
-  )
-}
-
-// ── Celda con imagen del medidor para cada período ────────────
-
-function MeterImageCell({ deptoId, periodoMes, periodoAnio, onZoom }: {
-  deptoId: string; periodoMes: number; periodoAnio: number; onZoom: (url: string) => void
-}) {
-  const [imgUrl, setImgUrl]   = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true); setImgUrl(null)
-    api.get('/readings', { params: { deptId: deptoId } })
-      .then(({ data }) => {
-        const reading = data.find((r: any) => {
-          const recibo = r.recibo
-          return recibo &&
-            parseInt(recibo.periodoMes)  === periodoMes &&
-            parseInt(recibo.periodoAnio) === periodoAnio
-        })
-        // ✅ Usar imagenFilename directamente — ya viene en la respuesta
-        if (reading?.imagenFilename) {
-          setImgUrl(`/uploads/meters/${reading.imagenFilename}`)
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [deptoId, periodoMes, periodoAnio])
-
-  if (loading) return (
-    <div style={{ width:44,height:44,background:'var(--bg-elevated)',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center' }}>
-      <Loader2 size={12} color="var(--text-muted)" style={{ animation:'spin 0.8s linear infinite' }}/>
-    </div>
-  )
-  if (!imgUrl) return <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>
-
-  return (
-    <button onClick={() => onZoom(imgUrl)}
-      style={{ position:'relative',width:44,height:44,borderRadius:6,overflow:'hidden',border:'1px solid var(--border)',cursor:'pointer',background:'var(--bg-elevated)',display:'flex',alignItems:'center',justifyContent:'center',padding:0 }}>
-      <img src={imgUrl} alt="medidor" style={{ width:'100%',height:'100%',objectFit:'cover' }}
-        onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
-      <div style={{ position:'absolute',inset:0,background:'rgba(0,0,0,0)',display:'flex',alignItems:'center',justifyContent:'center',transition:'background 0.15s' }}
-        onMouseEnter={e => (e.currentTarget.style.background='rgba(0,0,0,0.4)')}
-        onMouseLeave={e => (e.currentTarget.style.background='rgba(0,0,0,0)')}>
-        <ZoomIn size={13} color="#fff" style={{ opacity:0.8 }} />
-      </div>
-    </button>
   )
 }
 
