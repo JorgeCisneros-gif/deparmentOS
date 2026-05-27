@@ -1,5 +1,8 @@
 // src/propietarios/propietarios.controller.ts
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller, Get, Post, Patch, Delete,
+  Body, Param, Query, UseGuards, Request,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { PropietariosService } from './propietarios.service';
 import { CreatePropietarioDto, UpdatePropietarioDto } from './propietarios.dto';
@@ -11,7 +14,7 @@ import { UserRole } from '../users/user.entity';
 @ApiTags('Propietarios')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPERVISOR)
+@Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
 @Controller('propietarios')
 export class PropietariosController {
   constructor(private readonly svc: PropietariosService) {}
@@ -46,8 +49,9 @@ export class PropietariosController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Desactivar propietario' })
-  deactivate(@Param('id') id: string) {
-    return this.svc.deactivate(id);
+  @Roles(UserRole.SUPERVISOR)    // solo supervisor puede eliminar
+  @ApiOperation({ summary: 'Eliminar propietario' })
+  remove(@Param('id') id: string) {
+    return this.svc.remove(id);
   }
 }

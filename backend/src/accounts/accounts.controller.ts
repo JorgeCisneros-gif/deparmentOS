@@ -1,3 +1,4 @@
+// src/accounts/accounts.controller.ts
 import {
   Controller, Get, Post, Patch, Body, Param,
   UseGuards, Request,
@@ -17,11 +18,9 @@ import { UsersService } from '../users/users.service';
 @Controller('accounts')
 export class AccountsController {
   constructor(
-    private readonly svc: AccountsService,
+    private readonly svc:      AccountsService,
     private readonly usersSvc: UsersService,
   ) {}
-
-  // ── Solo supervisor ───────────────────────────────────────────
 
   @Post()
   @Roles(UserRole.SUPERVISOR)
@@ -30,12 +29,13 @@ export class AccountsController {
     // 1. Crear la cuenta
     const account = await this.svc.create(dto, req.user.id);
 
-    // 2. Crear el usuario administrador de la cuenta automáticamente
+    // 2. Crear el usuario administrador con idAccount y opcionalmente idEdificio
     await this.usersSvc.create({
-      email:    dto.email,
-      password: dto.adminPassword,
-      role:     UserRole.ADMINISTRADOR,
-      idAccount: account.id,
+      email:      dto.email,
+      password:   dto.adminPassword,
+      role:       UserRole.ADMINISTRADOR,
+      idAccount:  account.id,
+      idEdificio: (dto as any).idEdificio || null,
     } as any);
 
     return account;
@@ -44,23 +44,17 @@ export class AccountsController {
   @Get()
   @Roles(UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Listar todas las cuentas' })
-  findAll() {
-    return this.svc.findAll();
-  }
+  findAll() { return this.svc.findAll(); }
 
   @Get('stats')
   @Roles(UserRole.SUPERVISOR)
-  @ApiOperation({ summary: 'Estadísticas de cuentas y suscripciones' })
-  getStats() {
-    return this.svc.getStats();
-  }
+  @ApiOperation({ summary: 'Estadísticas de cuentas' })
+  getStats() { return this.svc.getStats(); }
 
   @Get(':id')
   @Roles(UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Ver detalle de una cuenta' })
-  findOne(@Param('id') id: string) {
-    return this.svc.findOne(id);
-  }
+  findOne(@Param('id') id: string) { return this.svc.findOne(id); }
 
   @Patch(':id')
   @Roles(UserRole.SUPERVISOR)
@@ -72,16 +66,12 @@ export class AccountsController {
   @Patch(':id/suspend')
   @Roles(UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Suspender cuenta' })
-  suspend(@Param('id') id: string) {
-    return this.svc.suspend(id);
-  }
+  suspend(@Param('id') id: string) { return this.svc.suspend(id); }
 
   @Patch(':id/activate')
   @Roles(UserRole.SUPERVISOR)
-  @ApiOperation({ summary: 'Reactivar cuenta suspendida' })
-  activate(@Param('id') id: string) {
-    return this.svc.activate(id);
-  }
+  @ApiOperation({ summary: 'Reactivar cuenta' })
+  activate(@Param('id') id: string) { return this.svc.activate(id); }
 
   @Patch(':id/reset-password')
   @Roles(UserRole.SUPERVISOR)

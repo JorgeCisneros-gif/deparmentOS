@@ -3,7 +3,9 @@ import {
   Controller, Get, Post, Patch, Delete, Body, Param,
   Query, UseGuards, Request,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiBody,
+} from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 import { UsersService } from './users.service';
 import { PasswordResetService } from './password-reset.service';
@@ -27,6 +29,12 @@ class ResetPasswordDto {
   newPassword: string;
 }
 
+class DirectResetPasswordDto {
+  @IsString()
+  @MinLength(8)
+  newPassword: string;
+}
+
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
@@ -35,31 +43,36 @@ export class UsersController {
     private readonly resetSvc: PasswordResetService,
   ) {}
 
-  // ── CRUD usuarios (requiere auth + supervisor) ─────────────
+  // ── CRUD usuarios ────────────────────────────────────────────
 
   @Post()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
   @ApiOperation({ summary: 'Crear usuario' })
-  create(@Body() dto: CreateUserDto) {
-    return this.svc.create(dto);
+  create(@Body() dto: CreateUserDto, @Request() req: any) {
+    // Administrador solo puede crear gestion y propietario en su cuenta
+    return this.svc.create(dto, req.user.role, req.user.idAccount);
   }
 
   @Get()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Listar usuarios' })
   @ApiQuery({ name: 'role', enum: UserRole, required: false })
-  findAll(@Query('role') role?: UserRole) {
-    return this.svc.findAll(role);
+  findAll(@Query('role') role?: UserRole, @Request() req?: any) {
+    // Supervisor ve todos — administrador solo los de su cuenta
+    const accountId = req.user.role === UserRole.SUPERVISOR
+      ? undefined
+      : req.user.idAccount;
+    return this.svc.findAll(role, accountId);
   }
 
   @Get(':id')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Ver usuario' })
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
@@ -68,7 +81,7 @@ export class UsersController {
   @Patch(':id')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Actualizar usuario' })
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.svc.update(id, dto);
@@ -77,59 +90,45 @@ export class UsersController {
   @Patch(':id/deactivate')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Desactivar usuario' })
   deactivate(@Param('id') id: string) {
     return this.svc.deactivate(id);
   }
 
-  @Patch(':id/activate')
+  // Reset directo de contraseña (supervisor o admin de cuenta)
+  @Patch(':id/reset-password')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERVISOR)
-  @ApiOperation({ summary: 'Reactivar usuario' })
-  activate(@Param('id') id: string) {
-    return this.svc.update(id, { isActive: true });
+  @Roles(UserRole.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Resetear contraseña de un usuario directamente' })
+  @ApiBody({ type: DirectResetPasswordDto })
+  async resetPassword(@Param('id') id: string, @Body() dto: DirectResetPasswordDto) {
+    await this.svc.resetPassword(id, dto.newPassword);
+    return { message: 'Contraseña actualizada correctamente' };
   }
 
-  // ── Cambio de contraseña (usuario autenticado) ─────────────
+  // ── Password reset por email (público) ───────────────────────
 
-  @Patch('me/change-password')
-  @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Cambiar mi contraseña (usuario autenticado)' })
-  changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
-    return this.svc.changePassword(req.user.id, dto);
-  }
-
-  // ── Reset de contraseña (rutas públicas — sin auth) ────────
-
-  // IMPORTANTE: estas rutas van ANTES de /:id para evitar conflictos
-
-  @Post('reset/request')
-  @ApiOperation({
-    summary: 'Solicitar reset de contraseña',
-    description: `
-Envía instrucciones según RESET_NOTIFICATION en .env:
-- email     → envía correo vía SMTP
-- whatsapp  → devuelve URL de WhatsApp para copiar/enviar
-- both      → ambos
-    `,
-  })
+  @Post('request-password-reset')
+  @ApiOperation({ summary: 'Solicitar reset de contraseña por email' })
   requestReset(@Body() dto: RequestResetDto) {
     return this.resetSvc.requestReset(dto.email);
   }
 
-  @Get('reset/validate')
-  @ApiOperation({ summary: 'Validar token de reset (el frontend lo llama al cargar la página)' })
-  @ApiQuery({ name: 'token', required: true })
-  validateToken(@Query('token') token: string) {
-    return this.resetSvc.validateToken(token);
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Confirmar reset con token' })
+  resetByToken(@Body() dto: ResetPasswordDto) {
+    return this.resetSvc.resetPassword(dto.token, dto.newPassword);
   }
 
-  @Post('reset/confirm')
-  @ApiOperation({ summary: 'Aplicar nueva contraseña con el token de reset' })
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.resetSvc.resetPassword(dto.token, dto.newPassword);
+  // ── Cambio de contraseña propio ──────────────────────────────
+
+  @Patch('me/password')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Cambiar contraseña propia' })
+  changePassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
+    return this.svc.changePassword(req.user.id, dto);
   }
 }

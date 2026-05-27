@@ -34,13 +34,9 @@ export class Building {
   })
   serviciosActivos: Record<string, boolean>;
 
-  // ── Campos de localización ────────────────────────────────
-  // Timezone IANA del edificio — usado para calcular fechas correctamente.
-  // Ejemplo: 'America/Lima', 'America/Santiago', 'America/Sao_Paulo'
   @Column({ length: 60, default: 'America/Lima' })
   timezone: string;
 
-  // Referencia al país (para obtener moneda, locale, timezone)
   @Column({ name: 'pais_id', nullable: true })
   paisId: number;
 
@@ -48,13 +44,15 @@ export class Building {
   @JoinColumn({ name: 'pais_id' })
   pais: Pais;
 
-  // Moneda del edificio (puede diferir del país en casos de dolarización)
   @Column({ length: 10, default: 'PEN' })
   moneda: string;
 
-  // Locale para formateo de fechas y números
   @Column({ length: 10, default: 'es-PE' })
   locale: string;
+
+  // ── Cuenta de suscripción (null = pertenece al supervisor global) ──
+  @Column({ name: 'id_account', nullable: true })
+  idAccount: string | null;
 
   @OneToMany(() => Department, (d) => d.edificio)
   departamentos: Department[];

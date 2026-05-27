@@ -3,9 +3,8 @@ import { useEffect, useState } from 'react'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 import {
-  Plus, Pencil, X, Loader2, Save, Layers, KeyRound,
-  CheckCircle2, XCircle, AlertCircle, Building2,
-  Users, Calendar, TrendingUp,
+  Plus, Pencil, X, Loader2, Save, KeyRound,
+  CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -23,6 +22,8 @@ interface Account {
   createdAt:         string
 }
 
+interface Building { id: string; nombre: string }
+
 interface Stats {
   total: number; active: number; expired: number; suspended: number
   byPlan: Record<Plan, number>
@@ -30,7 +31,7 @@ interface Stats {
 
 type Plan = 'full' | 'demo' | 'standard' | 'premium' | 'enterprise'
 
-// ── Configuración visual de planes ───────────────────────────────────────────
+// ── Config visual ─────────────────────────────────────────────────────────────
 const PLAN_CFG: Record<Plan, { label: string; color: string; bg: string }> = {
   full:       { label: 'Full',       color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
   demo:       { label: 'Demo',       color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
@@ -47,19 +48,22 @@ const STATUS_CFG = {
 
 const EMPTY_FORM = {
   nombre: '', email: '', plan: 'demo' as Plan,
-  subscriptionEnd: '', adminPassword: '',
+  subscriptionEnd: '', adminPassword: '', idEdificio: '',
 }
 
-// ── Componentes auxiliares ────────────────────────────────────────────────────
+// ── Estilos base ──────────────────────────────────────────────────────────────
 const btn: React.CSSProperties  = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.55rem 1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
 const btn2: React.CSSProperties = { ...btn, background:'var(--bg-elevated)',color:'var(--text-secondary)',border:'1px solid var(--border)' }
 const inp: React.CSSProperties  = { width:'100%',background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.35rem' }}>{label}</label>
+      <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.35rem' }}>
+        {label}
+      </label>
       {children}
+      {hint && <p style={{ fontSize:'0.72rem',color:'var(--text-muted)',marginTop:'0.25rem' }}>{hint}</p>}
     </div>
   )
 }
@@ -73,42 +77,54 @@ function PlanBadge({ plan }: { plan: Plan }) {
   )
 }
 
-// ── Página principal ──────────────────────────────────────────────────────────
+// ── Página ────────────────────────────────────────────────────────────────────
 export default function AccountsPage() {
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [stats, setStats]       = useState<Stats | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [modal, setModal]       = useState(false)
+  const [accounts, setAccounts]   = useState<Account[]>([])
+  const [stats, setStats]         = useState<Stats | null>(null)
+  const [buildings, setBuildings] = useState<Building[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [modal, setModal]         = useState(false)
   const [editModal, setEditModal] = useState<Account | null>(null)
   const [resetModal, setResetModal] = useState<Account | null>(null)
-  const [form, setForm]         = useState(EMPTY_FORM)
-  const [editForm, setEditForm] = useState<Partial<Account & { subscriptionEnd: string }>>({})
-  const [resetPwd, setResetPwd] = useState('')
-  const [saving, setSaving]     = useState(false)
-  const [filter, setFilter]     = useState<Plan | ''>('')
+  const [form, setForm]           = useState(EMPTY_FORM)
+  const [editForm, setEditForm]   = useState<Partial<Account & { subscriptionEnd: string }>>({})
+  const [resetPwd, setResetPwd]   = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [filter, setFilter]       = useState<Plan | ''>('')
 
   useEffect(() => { load() }, [])
 
   const load = async () => {
     setLoading(true)
     try {
-      const [accRes, statsRes] = await Promise.all([
+      const [accRes, statsRes, bldRes] = await Promise.all([
         api.get('/accounts'),
         api.get('/accounts/stats'),
+        api.get('/buildings'),
       ])
       setAccounts(accRes.data)
       setStats(statsRes.data)
-    } catch { toast.error('Error cargando cuentas') }
+      setBuildings(bldRes.data)
+    } catch { toast.error('Error cargando datos') }
     finally  { setLoading(false) }
   }
 
   const handleCreate = async () => {
     if (!form.nombre || !form.email || !form.adminPassword) {
-      toast.error('Completa todos los campos requeridos'); return
+      toast.error('Completa los campos requeridos (*)'); return
     }
     setSaving(true)
     try {
-      await api.post('/accounts', form)
+      const payload: any = {
+        nombre:        form.nombre,
+        email:         form.email,
+        plan:          form.plan,
+        adminPassword: form.adminPassword,
+      }
+      if (form.subscriptionEnd)  payload.subscriptionEnd = form.subscriptionEnd
+      if (form.idEdificio)       payload.idEdificio      = form.idEdificio
+
+      await api.post('/accounts', payload)
       toast.success('Cuenta creada correctamente')
       setModal(false); setForm(EMPTY_FORM); load()
     } catch (e: any) {
@@ -164,26 +180,20 @@ export default function AccountsPage() {
       {/* Header */}
       <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem' }} className="fade-up">
         <div>
-          <h1 style={{ fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:700,letterSpacing:'-0.02em',marginBottom:'0.25rem' }}>
-            Suscripciones
-          </h1>
-          <p style={{ color:'var(--text-secondary)',fontSize:'0.875rem' }}>
-            Gestiona las cuentas y planes de suscripción
-          </p>
+          <h1 style={{ fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:700,letterSpacing:'-0.02em',marginBottom:'0.25rem' }}>Suscripciones</h1>
+          <p style={{ color:'var(--text-secondary)',fontSize:'0.875rem' }}>Gestiona las cuentas y planes de suscripción</p>
         </div>
-        <button style={btn} onClick={() => setModal(true)}>
-          <Plus size={16} /> Nueva cuenta
-        </button>
+        <button style={btn} onClick={() => setModal(true)}><Plus size={16} /> Nueva cuenta</button>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'0.75rem',marginBottom:'1.5rem' }} className="fade-up">
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:'0.75rem',marginBottom:'1.5rem' }} className="fade-up">
           {[
-            { label:'Total',      value: stats.total,     color:'var(--text-primary)' },
-            { label:'Activas',    value: stats.active,    color:'var(--green)' },
-            { label:'Vencidas',   value: stats.expired,   color:'#f87171' },
-            { label:'Suspendidas',value: stats.suspended, color:'var(--accent)' },
+            { label:'Total',       value: stats.total,     color:'var(--text-primary)' },
+            { label:'Activas',     value: stats.active,    color:'var(--green)' },
+            { label:'Vencidas',    value: stats.expired,   color:'#f87171' },
+            { label:'Suspendidas', value: stats.suspended, color:'var(--accent)' },
           ].map(s => (
             <div key={s.label} style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'0.9rem 1rem' }}>
               <p style={{ fontSize:'0.68rem',color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:'0.3rem' }}>{s.label}</p>
@@ -199,16 +209,11 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* Filtro por plan */}
+      {/* Filtros */}
       <div style={{ display:'flex',gap:'0.5rem',marginBottom:'1rem',flexWrap:'wrap' }} className="fade-up">
-        <button onClick={() => setFilter('')} style={{ ...btn2, ...(filter==='' ? {background:'var(--accent-dim)',color:'var(--accent)',borderColor:'var(--accent)'} : {}) }}>
-          Todos
-        </button>
+        <button onClick={() => setFilter('')} style={{ ...btn2, ...(filter==='' ? {background:'var(--accent-dim)',color:'var(--accent)',borderColor:'var(--accent)'} : {}) }}>Todos</button>
         {Object.entries(PLAN_CFG).map(([plan, cfg]) => (
-          <button key={plan} onClick={() => setFilter(plan as Plan)}
-            style={{ ...btn2, ...(filter===plan ? {background:cfg.bg,color:cfg.color,borderColor:`${cfg.color}40`} : {}) }}>
-            {cfg.label}
-          </button>
+          <button key={plan} onClick={() => setFilter(plan as Plan)} style={{ ...btn2, ...(filter===plan ? {background:cfg.bg,color:cfg.color,borderColor:`${cfg.color}40`} : {}) }}>{cfg.label}</button>
         ))}
       </div>
 
@@ -229,7 +234,7 @@ export default function AccountsPage() {
             </thead>
             <tbody>
               {filtered.map((acc, i) => {
-                const stCfg     = STATUS_CFG[acc.status]
+                const stCfg      = STATUS_CFG[acc.status]
                 const StatusIcon = stCfg.Icon
                 return (
                   <tr key={acc.id} style={i%2!==0 ? {background:'rgba(255,255,255,0.02)'} : {}}>
@@ -237,23 +242,15 @@ export default function AccountsPage() {
                       <div style={{ fontWeight:600 }}>{acc.nombre}</div>
                       <div style={{ fontSize:'0.75rem',color:'var(--text-muted)' }}>{acc.email}</div>
                     </td>
-                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-                      <PlanBadge plan={acc.plan} />
-                    </td>
+                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}><PlanBadge plan={acc.plan} /></td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
                       <span style={{ display:'flex',alignItems:'center',gap:'0.3rem',fontSize:'0.78rem',color:stCfg.color,fontWeight:600 }}>
                         <StatusIcon size={13} /> {stCfg.label}
                       </span>
                     </td>
-                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}>
-                      <span style={{ fontWeight:700 }}>{acc.maxEdificios === 9999 ? '∞' : acc.maxEdificios}</span>
-                    </td>
-                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}>
-                      <span style={{ fontWeight:700 }}>{acc.maxDeptos === 9999 ? '∞' : acc.maxDeptos}</span>
-                    </td>
-                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}>
-                      <span style={{ fontWeight:700 }}>{acc.maxPeriodos === 9999 ? '∞' : acc.maxPeriodos}</span>
-                    </td>
+                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxEdificios >= 9999 ? '∞' : acc.maxEdificios}</span></td>
+                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxDeptos    >= 9999 ? '∞' : acc.maxDeptos}</span></td>
+                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxPeriodos >= 9999 ? '∞' : acc.maxPeriodos}</span></td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',color:'var(--text-muted)',fontSize:'0.82rem' }}>
                       {acc.subscriptionEnd ? new Date(acc.subscriptionEnd).toLocaleDateString('es-PE') : '—'}
                     </td>
@@ -281,7 +278,7 @@ export default function AccountsPage() {
       {/* ── Modal crear cuenta ── */}
       {modal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem' }}>
-          <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:480 }}>
+          <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto' }}>
             <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem' }}>
               <h2 style={{ fontFamily:'var(--font-display)',fontSize:'1.3rem',fontWeight:700 }}>Nueva cuenta</h2>
               <button onClick={() => setModal(false)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)' }}><X size={18} /></button>
@@ -308,6 +305,21 @@ export default function AccountsPage() {
                   <input style={inp} type="date" value={form.subscriptionEnd} onChange={e => setForm(p => ({ ...p, subscriptionEnd: e.target.value }))} />
                 </Field>
               )}
+              <Field
+                label="Edificio existente (opcional)"
+                hint="Si se selecciona, el administrador quedará asociado a este edificio."
+              >
+                <select
+                  style={inp}
+                  value={form.idEdificio}
+                  onChange={e => setForm(p => ({ ...p, idEdificio: e.target.value }))}
+                >
+                  <option value="">— Sin edificio asignado —</option>
+                  {buildings.map(b => (
+                    <option key={b.id} value={b.id}>{b.nombre}</option>
+                  ))}
+                </select>
+              </Field>
             </div>
             <div style={{ display:'flex',gap:'0.75rem',marginTop:'1.5rem',justifyContent:'flex-end' }}>
               <button style={btn2} onClick={() => setModal(false)}>Cancelar</button>
@@ -320,7 +332,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* ── Modal editar cuenta ── */}
+      {/* ── Modal editar ── */}
       {editModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem' }}>
           <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:420 }}>
