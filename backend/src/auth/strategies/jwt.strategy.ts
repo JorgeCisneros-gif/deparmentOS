@@ -4,10 +4,11 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersService } from '../../users/users.service';
 
 export interface JwtPayload {
-  sub: string;
-  email: string;
-  role: string;
-  idEdificio?: string;
+  sub:             string;
+  email:           string;
+  role:            string;
+  idAccount?:      string;   // ← nuevo
+  idEdificio?:     string;
   idDepartamento?: string;
 }
 
@@ -15,9 +16,9 @@ export interface JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(private readonly usersService: UsersService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest:   ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'edify_super_secret_key',
+      secretOrKey:      process.env.JWT_SECRET || 'edify_super_secret_key',
     });
   }
 
@@ -27,10 +28,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Token inválido o usuario inactivo');
     }
     return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      idEdificio: payload.idEdificio,
+      id:             payload.sub,
+      email:          payload.email,
+      role:           payload.role,
+      idAccount:      user.idAccount,       // siempre fresco desde BD
+      idEdificio:     payload.idEdificio,
       idDepartamento: payload.idDepartamento,
     };
   }

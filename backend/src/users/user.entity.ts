@@ -6,7 +6,8 @@ import { Exclude } from 'class-transformer';
 
 export enum UserRole {
   SUPERVISOR    = 'supervisor',
-  ADMINISTRADOR = 'administrador',   // acceso total, restringido a su edificio
+  ADMINISTRADOR = 'administrador',
+  GESTION       = 'gestion',        // ← nuevo
   PROPIETARIO   = 'propietario',
 }
 
@@ -25,15 +26,21 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.PROPIETARIO })
   role: UserRole;
 
+  // ── Relación con cuenta (null = supervisor global) ─────────
+  @Column({ name: 'id_account', nullable: true })
+  idAccount: string | null;
+
+  // ── Asignaciones ────────────────────────────────────────────
   @Column({ name: 'id_edificio', nullable: true })
-  idEdificio: string;
+  idEdificio: string | null;
 
   @Column({ name: 'id_departamento', nullable: true })
-  idDepartamento: string;
+  idDepartamento: string | null;
 
   @Column({ name: 'id_propietario', nullable: true })
-  idPropietario: string;
+  idPropietario: string | null;
 
+  // ── Estado ──────────────────────────────────────────────────
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 

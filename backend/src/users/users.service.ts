@@ -1,6 +1,7 @@
 // src/users/users.service.ts
 import {
-  Injectable, NotFoundException, ConflictException, BadRequestException,
+  Injectable, NotFoundException, ConflictException,
+  BadRequestException, ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -15,22 +16,34 @@ export class UsersService {
     private readonly repo: Repository<User>,
   ) {}
 
-  async create(dto: CreateUserDto): Promise<User> {
+  async create(dto: CreateUserDto, creatorRole?: UserRole, creatorAccountId?: string): Promise<User> {
     const exists = await this.repo.findOne({ where: { email: dto.email } });
     if (exists) throw new ConflictException('El email ya está registrado');
 
-    // Validaciones de rol
-    if (dto.role === UserRole.SUPERVISOR && !dto.idEdificio) {
-      throw new BadRequestException('El supervisor debe tener un idEdificio asignado');
+    // ── Restricciones según quién crea ──────────────────────
+    if (creatorRole === UserRole.ADMINISTRADOR) {
+      // Admin solo puede crear gestion y propietario dentro de su cuenta
+      if (![UserRole.GESTION, UserRole.PROPIETARIO].includes(dto.role as UserRole)) {
+        throw new ForbiddenException('El administrador solo puede crear usuarios de tipo gestión o propietario');
+      }
+      // Forzar que el usuario creado pertenezca a la misma cuenta
+      dto.idAccount = creatorAccountId;
     }
-    if (dto.role === UserRole.ADMINISTRADOR && !dto.idEdificio) {
-      throw new BadRequestException('El administrador debe tener un idEdificio asignado');
-    }
+
+    // ── Validaciones por rol ─────────────────────────────────
     if (dto.role === UserRole.PROPIETARIO && !dto.idDepartamento) {
       throw new BadRequestException('El propietario debe tener un idDepartamento asignado');
     }
 
-    // Auto-resolver idPropietario desde el departamento si no se envió
+    if (dto.role === UserRole.ADMINISTRADOR && !dto.idAccount) {
+      throw new BadRequestException('El administrador debe estar asociado a una cuenta');
+    }
+
+    if (dto.role === UserRole.GESTION && !dto.idAccount) {
+      throw new BadRequestException('El usuario de gestión debe estar asociado a una cuenta');
+    }
+
+    // Auto-resolver idPropietario
     let idPropietario = dto.idPropietario || null;
     if (dto.role === UserRole.PROPIETARIO && dto.idDepartamento && !idPropietario) {
       const deptData = await this.repo.query(
@@ -44,22 +57,24 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = this.repo.create({
-      email:           dto.email,
+      email:          dto.email,
       passwordHash,
-      role:            dto.role,
-      idEdificio:      dto.idEdificio      || null,
-      idDepartamento:  dto.idDepartamento  || null,
+      role:           dto.role,
+      idAccount:      dto.idAccount      || null,
+      idEdificio:     dto.idEdificio     || null,
+      idDepartamento: dto.idDepartamento || null,
       idPropietario,
-      isActive:        true,
+      isActive:       true,
     });
     return this.repo.save(user);
   }
 
-  async findAll(role?: UserRole): Promise<User[]> {
-    return this.repo.find({
-      where: role ? { role } : {},
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(role?: UserRole, accountId?: string): Promise<User[]> {
+    const where: any = {};
+    if (role)      where.role      = role;
+    if (accountId) where.idAccount = accountId;
+
+    return this.repo.find({ where, order: { createdAt: 'DESC' } });
   }
 
   async findOne(id: string): Promise<User> {
@@ -87,6 +102,13 @@ export class UsersService {
     const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
     if (!valid) throw new BadRequestException('Contraseña actual incorrecta');
     user.passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.repo.save(user);
+  }
+
+  // Reset directo de contraseña (por supervisor o admin de cuenta)
+  async resetPassword(id: string, newPassword: string): Promise<void> {
+    const user = await this.findOne(id);
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
     await this.repo.save(user);
   }
 

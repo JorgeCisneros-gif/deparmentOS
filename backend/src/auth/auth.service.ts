@@ -23,20 +23,20 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
 
-    // Actualizar last_login
     await this.usersService.update(user.id, { isActive: user.isActive });
 
     const tokens = await this.generateTokens(user);
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
 
     return {
-      accessToken: tokens.accessToken,
+      accessToken:  tokens.accessToken,
       refreshToken: tokens.refreshToken,
       user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        idEdificio: user.idEdificio,
+        id:             user.id,
+        email:          user.email,
+        role:           user.role,
+        idAccount:      user.idAccount,      // ← incluir en respuesta
+        idEdificio:     user.idEdificio,
         idDepartamento: user.idDepartamento,
       },
     };
@@ -48,7 +48,7 @@ export class AuthService {
         secret: process.env.JWT_REFRESH_SECRET || 'edify_refresh_secret',
       });
 
-      const user = await this.usersService.findOne(payload.sub);
+      const user  = await this.usersService.findOne(payload.sub);
       const valid = await this.usersService.validateRefreshToken(user.id, dto.refreshToken);
       if (!valid) throw new UnauthorizedException('Refresh token inválido');
 
@@ -67,20 +67,21 @@ export class AuthService {
 
   private async generateTokens(user: any) {
     const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      idEdificio: user.idEdificio,
+      sub:            user.id,
+      email:          user.email,
+      role:           user.role,
+      idAccount:      user.idAccount,       // ← en el token
+      idEdificio:     user.idEdificio,
       idDepartamento: user.idDepartamento,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_SECRET || 'edify_super_secret_key',
+        secret:    process.env.JWT_SECRET || 'edify_super_secret_key',
         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       }),
       this.jwtService.signAsync(payload, {
-        secret: process.env.JWT_REFRESH_SECRET || 'edify_refresh_secret',
+        secret:    process.env.JWT_REFRESH_SECRET || 'edify_refresh_secret',
         expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
       }),
     ]);
