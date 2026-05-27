@@ -3,11 +3,15 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Building } from './building.entity';
 import { BuildingsService } from './buildings.service';
 import { BuildingsController } from './buildings.controller';
+import { AccountsModule } from '../accounts/accounts.module';  // ← agregar
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Building])],
-  providers: [BuildingsService],
+  imports: [
+    TypeOrmModule.forFeature([Building]),
+    AccountsModule,   // ← agregar
+  ],
   controllers: [BuildingsController],
-  exports: [BuildingsService],
+  providers:   [BuildingsService],
+  exports:     [BuildingsService],
 })
 export class BuildingsModule {}
