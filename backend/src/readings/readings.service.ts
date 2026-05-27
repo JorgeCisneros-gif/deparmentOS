@@ -242,29 +242,30 @@ async processOcrImage(
     const desdeMes = desde.getMonth() + 1;
 
     const historial = await this.readingRepo
-      .createQueryBuilder('r')
-      .leftJoin('r.recibo', 'rec')
-      .leftJoin('rec.servicio', 'svc')
-      .where('r.id_departamento = :idDepartamento', { idDepartamento })
-      .andWhere('svc.tipo = :tipo', { tipo: 'agua' })
-      .andWhere(
-        // Filtrar por período >= fecha límite
-        '(rec.periodo_anio > :desdeAnio OR (rec.periodo_anio = :desdeAnio AND rec.periodo_mes >= :desdeMes))',
-        { desdeAnio, desdeMes },
-      )
-      .select([
-        'rec.periodoAnio AS anio',
-        'rec.periodoMes AS mes',
-        'r.lecturaAnterior AS lectura_anterior',
-        'r.lecturaActual AS lectura_actual',
-        'r.m3Consumido AS m3_consumido',
-        'r.montoCalculado AS monto_calculado',
-        'rec.precioM3 AS precio_m3',
-      ])
-      .orderBy('rec.periodoAnio', 'DESC')
-      .addOrderBy('rec.periodoMes', 'DESC')
-      .limit(limitMeses)
-      .getRawMany();
+  .createQueryBuilder('r')
+  .leftJoin('r.recibo', 'rec')
+  .leftJoin('rec.servicio', 'svc')
+  .leftJoin('meter_images', 'mi', 'mi.id = CAST(r.id_meter_image AS uuid)')  // ← agregar este join
+  .where('r.id_departamento = :idDepartamento', { idDepartamento })
+  .andWhere('svc.tipo = :tipo', { tipo: 'agua' })
+  .andWhere(
+    '(rec.periodo_anio > :desdeAnio OR (rec.periodo_anio = :desdeAnio AND rec.periodo_mes >= :desdeMes))',
+    { desdeAnio, desdeMes },
+  )
+  .select([
+    'rec.periodoAnio    AS anio',
+    'rec.periodoMes     AS mes',
+    'r.lecturaAnterior  AS lectura_anterior',
+    'r.lecturaActual    AS lectura_actual',
+    'r.m3Consumido      AS m3_consumido',
+    'r.montoCalculado   AS monto_calculado',
+    'rec.precioM3       AS precio_m3',
+    'mi.filename        AS "imagenFilename"',  // ← agregar este campo
+  ])
+  .orderBy('rec.periodoAnio', 'DESC')
+  .addOrderBy('rec.periodoMes', 'DESC')
+  .limit(limitMeses)
+  .getRawMany();
 
     return {
       mesesMostrados: limitMeses,
