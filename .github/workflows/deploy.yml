@@ -1,4 +1,38 @@
-- name: Deploy al servidor
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar cloudflared
+        run: |
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+          sudo dpkg -i cloudflared.deb
+
+      - name: Configurar SSH via Cloudflare Tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          cat >> ~/.ssh/config << EOF
+          Host ssh.suite-os.app
+            HostName ssh.suite-os.app
+            User ${{ secrets.SSH_USER }}
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking no
+            ProxyCommand cloudflared access ssh --hostname %h
+          EOF
+
+      - name: Deploy al servidor
         run: |
           ssh ${{ secrets.SSH_USER }}@ssh.suite-os.app << 'ENDSSH'
             set -e
