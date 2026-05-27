@@ -19,6 +19,11 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   role: UserRole;
 
+  @ApiPropertyOptional({ description: 'UUID de la cuenta de suscripción' })
+  @IsOptional()
+  @IsUUID()
+  idAccount?: string;        // ← agregar esto
+
   @ApiPropertyOptional({ description: 'UUID del edificio (requerido para supervisor)' })
   @IsOptional()
   @IsUUID()
