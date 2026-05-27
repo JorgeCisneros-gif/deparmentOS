@@ -48,10 +48,10 @@ export class PropietariosController {
     return this.svc.update(id, dto);
   }
 
-  @Delete(':id')
-  @Roles(UserRole.SUPERVISOR)    // solo supervisor puede eliminar
-  @ApiOperation({ summary: 'Eliminar propietario' })
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id);
-  }
+  @Patch(':id/deactivate')
+@Roles(UserRole.SUPERVISOR)
+@ApiOperation({ summary: 'Desactivar propietario' })
+deactivate(@Param('id') id: string) {
+  return this.svc.deactivate(id);
+}
 }
