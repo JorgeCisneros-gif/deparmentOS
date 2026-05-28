@@ -1,3 +1,4 @@
+// src/users/users.dto.ts
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import {
   IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString,
@@ -19,12 +20,12 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   role: UserRole;
 
-  @ApiPropertyOptional({ description: 'UUID de la cuenta de suscripción' })
+  @ApiPropertyOptional({ description: 'UUID del grupo al que pertenece' })
   @IsOptional()
   @IsUUID()
-  idAccount?: string;        // ← agregar esto
+  idGrupo?: string;
 
-  @ApiPropertyOptional({ description: 'UUID del edificio (requerido para supervisor)' })
+  @ApiPropertyOptional({ description: 'UUID del edificio (opcional)' })
   @IsOptional()
   @IsUUID()
   idEdificio?: string;
@@ -45,6 +46,11 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  password?: string;
 }
 
 export class ChangePasswordDto {

@@ -16,18 +16,18 @@ export class UsersService {
     private readonly repo: Repository<User>,
   ) {}
 
-  async create(dto: CreateUserDto, creatorRole?: UserRole, creatorAccountId?: string): Promise<User> {
+  async create(dto: CreateUserDto, creatorRole?: UserRole, creatorGrupoId?: string): Promise<User> {
     const exists = await this.repo.findOne({ where: { email: dto.email } });
     if (exists) throw new ConflictException('El email ya está registrado');
 
     // ── Restricciones según quién crea ──────────────────────
     if (creatorRole === UserRole.ADMINISTRADOR) {
-      // Admin solo puede crear gestion y propietario dentro de su cuenta
+      // Admin solo puede crear gestion y propietario dentro de su grupo
       if (![UserRole.GESTION, UserRole.PROPIETARIO].includes(dto.role as UserRole)) {
         throw new ForbiddenException('El administrador solo puede crear usuarios de tipo gestión o propietario');
       }
-      // Forzar que el usuario creado pertenezca a la misma cuenta
-      dto.idAccount = creatorAccountId;
+      // Forzar que el usuario creado pertenezca al mismo grupo
+      dto.idGrupo = creatorGrupoId;
     }
 
     // ── Validaciones por rol ─────────────────────────────────
@@ -35,15 +35,15 @@ export class UsersService {
       throw new BadRequestException('El propietario debe tener un idDepartamento asignado');
     }
 
-    if (dto.role === UserRole.ADMINISTRADOR && !dto.idAccount) {
-      throw new BadRequestException('El administrador debe estar asociado a una cuenta');
+    if (dto.role === UserRole.ADMINISTRADOR && !dto.idGrupo) {
+      throw new BadRequestException('El administrador debe estar asociado a un grupo');
     }
 
-    if (dto.role === UserRole.GESTION && !dto.idAccount) {
-      throw new BadRequestException('El usuario de gestión debe estar asociado a una cuenta');
+    if (dto.role === UserRole.GESTION && !dto.idGrupo) {
+      throw new BadRequestException('El usuario de gestión debe estar asociado a un grupo');
     }
 
-    // Auto-resolver idPropietario
+    // Auto-resolver idPropietario desde el departamento
     let idPropietario = dto.idPropietario || null;
     if (dto.role === UserRole.PROPIETARIO && dto.idDepartamento && !idPropietario) {
       const deptData = await this.repo.query(
@@ -60,7 +60,7 @@ export class UsersService {
       email:          dto.email,
       passwordHash,
       role:           dto.role,
-      idAccount:      dto.idAccount      || null,
+      idGrupo:        dto.idGrupo        || null,
       idEdificio:     dto.idEdificio     || null,
       idDepartamento: dto.idDepartamento || null,
       idPropietario,
@@ -68,15 +68,20 @@ export class UsersService {
     });
     return this.repo.save(user);
   }
-  async updateLastLogin(id: string): Promise<void> {
-    await this.repo.update(id, { lastLogin: new Date() });
-    }
-  async findAll(role?: UserRole, accountId?: string): Promise<User[]> {
-    const where: any = {};
-    if (role)      where.role      = role;
-    if (accountId) where.idAccount = accountId;
 
-    return this.repo.find({ where, order: { createdAt: 'DESC' } });
+  // idGrupo filtra por grupo — undefined = supervisor ve todos
+  async findAll(role?: UserRole, idGrupo?: string): Promise<User[]> {
+    const qb = this.repo.createQueryBuilder('u');
+
+    if (role) qb.andWhere('u.role = :role', { role });
+
+    if (idGrupo) {
+      // Admin ve solo usuarios de su grupo (excluye al supervisor)
+      qb.andWhere('u.id_grupo = :idGrupo', { idGrupo });
+      qb.andWhere('u.role != :supRole', { supRole: UserRole.SUPERVISOR });
+    }
+
+    return qb.orderBy('u.created_at', 'DESC').getMany();
   }
 
   async findOne(id: string): Promise<User> {
@@ -107,7 +112,6 @@ export class UsersService {
     await this.repo.save(user);
   }
 
-  // Reset directo de contraseña (por supervisor o admin de cuenta)
   async resetPassword(id: string, newPassword: string): Promise<void> {
     const user = await this.findOne(id);
     user.passwordHash = await bcrypt.hash(newPassword, 10);
@@ -118,6 +122,10 @@ export class UsersService {
     const user = await this.findOne(id);
     user.isActive = false;
     await this.repo.save(user);
+  }
+
+  async updateLastLogin(id: string): Promise<void> {
+    await this.repo.update(id, { lastLogin: new Date() });
   }
 
   async updateRefreshToken(id: string, token: string | null): Promise<void> {

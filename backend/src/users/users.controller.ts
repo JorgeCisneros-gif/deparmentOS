@@ -1,6 +1,6 @@
 // src/users/users.controller.ts
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param,
+  Controller, Get, Post, Patch, Body, Param,
   Query, UseGuards, Request,
 } from '@nestjs/common';
 import {
@@ -48,11 +48,11 @@ export class UsersController {
   @Post()
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Crear usuario' })
   create(@Body() dto: CreateUserDto, @Request() req: any) {
-    // Administrador solo puede crear gestion y propietario en su cuenta
-    return this.svc.create(dto, req.user.role, req.user.idAccount);
+    // Pasar idGrupo en vez de idAccount
+    return this.svc.create(dto, req.user.role, req.user.idGrupo);
   }
 
   @Get()
@@ -62,11 +62,11 @@ export class UsersController {
   @ApiOperation({ summary: 'Listar usuarios' })
   @ApiQuery({ name: 'role', enum: UserRole, required: false })
   findAll(@Query('role') role?: UserRole, @Request() req?: any) {
-    // Supervisor ve todos — administrador solo los de su cuenta
-    const accountId = req.user.role === UserRole.SUPERVISOR
+    // Supervisor ve todos — administrador solo los de su grupo
+    const idGrupo = req.user.role === UserRole.SUPERVISOR
       ? undefined
-      : req.user.idAccount;
-    return this.svc.findAll(role, accountId);
+      : req.user.idGrupo;
+    return this.svc.findAll(role, idGrupo);
   }
 
   @Get(':id')
@@ -96,12 +96,11 @@ export class UsersController {
     return this.svc.deactivate(id);
   }
 
-  // Reset directo de contraseña (supervisor o admin de cuenta)
   @Patch(':id/reset-password')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Resetear contraseña de un usuario directamente' })
+  @ApiOperation({ summary: 'Resetear contraseña de un usuario' })
   @ApiBody({ type: DirectResetPasswordDto })
   async resetPassword(@Param('id') id: string, @Body() dto: DirectResetPasswordDto) {
     await this.svc.resetPassword(id, dto.newPassword);

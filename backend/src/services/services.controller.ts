@@ -11,7 +11,7 @@ import { UserRole } from '../users/user.entity';
 @ApiTags('Services')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPERVISOR)
+@Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
 @Controller('services')
 export class ServicesController {
   constructor(private readonly svc: ServicesService) {}
@@ -36,6 +36,7 @@ export class ServicesController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.SUPERVISOR)    // solo supervisor puede eliminar servicios
   @ApiOperation({ summary: 'Eliminar servicio' })
   remove(@Param('id') id: string) { return this.svc.remove(id); }
 }
