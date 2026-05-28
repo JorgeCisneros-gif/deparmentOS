@@ -1,6 +1,5 @@
-import {
-  Injectable, UnauthorizedException, BadRequestException,
-} from '@nestjs/common';
+// src/auth/auth.service.ts
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -11,7 +10,7 @@ import { JwtPayload } from './strategies/jwt.strategy';
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
-    private readonly jwtService: JwtService,
+    private readonly jwtService:   JwtService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -23,7 +22,8 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
 
-    await this.usersService.update(user.id, { isActive: user.isActive });
+    // Actualizar last_login
+    await this.usersService.updateLastLogin(user.id);
 
     const tokens = await this.generateTokens(user);
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
@@ -35,9 +35,10 @@ export class AuthService {
         id:             user.id,
         email:          user.email,
         role:           user.role,
-        idAccount:      user.idAccount,      // ← incluir en respuesta
+        idGrupo:        user.idGrupo,
         idEdificio:     user.idEdificio,
         idDepartamento: user.idDepartamento,
+        idPropietario:  user.idPropietario,
       },
     };
   }
@@ -47,7 +48,6 @@ export class AuthService {
       const payload = this.jwtService.verify(dto.refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET || 'edify_refresh_secret',
       });
-
       const user  = await this.usersService.findOne(payload.sub);
       const valid = await this.usersService.validateRefreshToken(user.id, dto.refreshToken);
       if (!valid) throw new UnauthorizedException('Refresh token inválido');
@@ -70,7 +70,7 @@ export class AuthService {
       sub:            user.id,
       email:          user.email,
       role:           user.role,
-      idAccount:      user.idAccount,       // ← en el token
+      idGrupo:        user.idGrupo,
       idEdificio:     user.idEdificio,
       idDepartamento: user.idDepartamento,
     };

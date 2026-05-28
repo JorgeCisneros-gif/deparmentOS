@@ -68,7 +68,9 @@ export class UsersService {
     });
     return this.repo.save(user);
   }
-
+  async updateLastLogin(id: string): Promise<void> {
+    await this.repo.update(id, { lastLogin: new Date() });
+    }
   async findAll(role?: UserRole, accountId?: string): Promise<User[]> {
     const where: any = {};
     if (role)      where.role      = role;

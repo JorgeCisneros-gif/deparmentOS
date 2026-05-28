@@ -1,13 +1,15 @@
+// src/users/user.entity.ts
 import {
   Entity, PrimaryGeneratedColumn, Column,
   CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { Grupo } from '../grupos/grupo.entity';
 
 export enum UserRole {
   SUPERVISOR    = 'supervisor',
   ADMINISTRADOR = 'administrador',
-  GESTION       = 'gestion',        // ← nuevo
+  GESTION       = 'gestion',
   PROPIETARIO   = 'propietario',
 }
 
@@ -26,11 +28,15 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.PROPIETARIO })
   role: UserRole;
 
-  // ── Relación con cuenta (null = supervisor global) ─────────
-  @Column({ name: 'id_account', nullable: true })
-  idAccount: string | null;
+  // ── Grupo al que pertenece (null = supervisor global) ────────
+  @Column({ name: 'id_grupo', nullable: true })
+  idGrupo: string | null;
 
-  // ── Asignaciones ────────────────────────────────────────────
+  @ManyToOne(() => Grupo, g => g.usuarios, { nullable: true })
+  @JoinColumn({ name: 'id_grupo' })
+  grupo: Grupo;
+
+  // ── Asignaciones ─────────────────────────────────────────────
   @Column({ name: 'id_edificio', nullable: true })
   idEdificio: string | null;
 
@@ -50,6 +56,10 @@ export class User {
   @Column({ name: 'refresh_token', nullable: true })
   @Exclude()
   refreshToken: string;
+
+  // ── Legacy (mantener para no romper FK) ─────────────────────
+  @Column({ name: 'id_account', nullable: true })
+  idAccount: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

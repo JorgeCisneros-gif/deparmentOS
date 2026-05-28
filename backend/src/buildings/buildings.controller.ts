@@ -29,56 +29,47 @@ export class BuildingsController {
   @SubscriptionCheck('edificios')
   @ApiOperation({ summary: 'Crear edificio' })
   async create(@Body() dto: CreateBuildingDto, @Request() req: any) {
-    // Asociar a la cuenta
-    if (req.user.idAccount) {
-      dto['idAccount'] = req.user.idAccount;
+    // Auto-asignar grupo
+    if (!dto['idGrupo']) {
+      if (req.user.role === UserRole.SUPERVISOR) {
+        const superGrupo = await this.gruposSvc.getSuperGrupo();
+        dto['idGrupo'] = superGrupo.id;
+      } else if (req.user.idGrupo) {
+        dto['idGrupo'] = req.user.idGrupo;
+      }
     }
-
-    // Auto-asignar al grupo de la cuenta si no viene en el body
-    if (!dto['idGrupo'] && req.user.idAccount) {
-      const grupo = await this.gruposSvc.findByAccount(req.user.idAccount);
-      if (grupo) dto['idGrupo'] = grupo.id;
-    }
-
-    // Supervisor: asignar al SuperGrupo si no viene grupo
-    if (req.user.role === UserRole.SUPERVISOR && !dto['idGrupo']) {
-      const superGrupo = await this.gruposSvc.getSuperGrupo();
-      if (superGrupo) dto['idGrupo'] = superGrupo.id;
-    }
-
     return this.svc.create(dto);
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Listar edificios' })
   async findAll(@Request() req: any) {
     if (req.user.role === UserRole.SUPERVISOR) {
       return this.svc.findAll(); // todos
     }
-    // Administrador — edificios de su grupo
-    const grupo = await this.gruposSvc.findByAccount(req.user.idAccount);
-    return this.svc.findByGrupo(grupo?.id);
+    // Admin/gestión: solo edificios de su grupo
+    return this.svc.findByGrupo(req.user.idGrupo);
   }
 
   @Get(':id')
   @Roles(UserRole.PROPIETARIO)
   @ApiOperation({ summary: 'Ver edificio' })
-  findOne(@Param('id') id: string) {
-    return this.svc.findOne(id);
-  }
+  findOne(@Param('id') id: string) { return this.svc.findOne(id); }
 
   @Patch(':id')
   @Roles(UserRole.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Actualizar edificio' })
-  update(@Param('id') id: string, @Body() dto: UpdateBuildingDto) {
+  @ApiOperation({ summary: 'Actualizar edificio (incluye cambio de grupo)' })
+  update(@Param('id') id: string, @Body() dto: UpdateBuildingDto, @Request() req: any) {
+    // Solo supervisor puede cambiar el grupo de un edificio
+    if (dto['idGrupo'] && req.user.role !== UserRole.SUPERVISOR) {
+      delete dto['idGrupo'];
+    }
     return this.svc.update(id, dto);
   }
 
   @Delete(':id')
   @Roles(UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Eliminar edificio' })
-  remove(@Param('id') id: string) {
-    return this.svc.remove(id);
-  }
+  remove(@Param('id') id: string) { return this.svc.remove(id); }
 }
