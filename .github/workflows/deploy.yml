@@ -41,10 +41,16 @@ jobs:
             echo "── Pull últimos cambios ──"
             git pull origin main
 
-            echo "── Rebuild servicios ──"
+            echo "── Rebuild backend y servicios ──"
             docker compose up --build -d
 
-            echo "── Reiniciar Nginx (actualizar DNS interno) ──"
+            echo "── Rebuild frontend sin caché ──"
+            docker compose build --no-cache frontend
+
+            echo "── Levantar frontend actualizado ──"
+            docker compose up -d frontend
+
+            echo "── Reiniciar Nginx ──"
             docker compose restart nginx
 
             echo "── Estado final ──"

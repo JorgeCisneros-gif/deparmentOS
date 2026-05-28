@@ -1,3 +1,4 @@
+// src/store/auth.store.ts
 import { create } from 'zustand'
 import api from '../services/api'
 import { APP_STORAGE_PREFIX } from '../config/brand'
@@ -9,34 +10,38 @@ interface AuthUser {
   id:              string
   email:           string
   role:            'supervisor' | 'administrador' | 'gestion' | 'propietario'
-  idAccount?:      string   // ← nuevo
+  idGrupo?:        string   // grupo al que pertenece
   idEdificio?:     string
   idDepartamento?: string
   idPropietario?:  string
 }
 
 interface AuthState {
-  user:            AuthUser | null
-  token:           string | null
-  loading:         boolean
-  login:           (email: string, password: string) => Promise<void>
-  logout:          () => void
-  // ── Helpers de rol ──────────────────────────────────────────
-  isSupervisor:    () => boolean   // solo supervisor (acceso total global)
-  isAdministrador: () => boolean   // solo administrador
-  isGestion:       () => boolean   // solo gestion
-  isPropietario:   () => boolean   // solo propietario
-  // ── Helpers de acceso ───────────────────────────────────────
-  canManageBuilding: () => boolean // supervisor | administrador
-  canOperate:        () => boolean // supervisor | administrador | gestion
-  canViewHistory:    () => boolean // supervisor | administrador | gestion | propietario
+  user:    AuthUser | null
+  token:   string | null
+  loading: boolean
+
+  login:   (email: string, password: string) => Promise<void>
+  logout:  () => void
+
+  // ── Helpers de rol ─────────────────────────────────────────
+  isSupervisor:    () => boolean  // solo supervisor
+  isAdministrador: () => boolean  // solo administrador
+  isGestion:       () => boolean  // solo gestion
+  isPropietario:   () => boolean  // solo propietario
+
+  // ── Helpers de acceso agrupados ────────────────────────────
+  canManage:      () => boolean  // supervisor + administrador
+  canOperate:     () => boolean  // supervisor + administrador + gestion
+  canViewHistory: () => boolean  // todos
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: (() => {
-    try { return JSON.parse(localStorage.getItem(KEY_USER) || 'null') } catch { return null }
+    try { return JSON.parse(localStorage.getItem(KEY_USER) || 'null') }
+    catch { return null }
   })(),
-  token: localStorage.getItem(KEY_TOKEN),
+  token:   localStorage.getItem(KEY_TOKEN),
   loading: false,
 
   login: async (email, password) => {
@@ -58,19 +63,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user: null, token: null })
   },
 
-  // ── Helpers individuales ─────────────────────────────────────
   isSupervisor:    () => get().user?.role === 'supervisor',
   isAdministrador: () => get().user?.role === 'administrador',
   isGestion:       () => get().user?.role === 'gestion',
   isPropietario:   () => get().user?.role === 'propietario',
 
-  // ── Helpers de acceso agrupados ──────────────────────────────
-  // supervisor + administrador → gestionan edificios, recibos, config
-  canManageBuilding: () => ['supervisor', 'administrador'].includes(get().user?.role ?? ''),
-
-  // supervisor + administrador + gestion → operaciones diarias
-  canOperate: () => ['supervisor', 'administrador', 'gestion'].includes(get().user?.role ?? ''),
-
-  // todos
+  canManage:      () => ['supervisor', 'administrador'].includes(get().user?.role ?? ''),
+  canOperate:     () => ['supervisor', 'administrador', 'gestion'].includes(get().user?.role ?? ''),
   canViewHistory: () => ['supervisor', 'administrador', 'gestion', 'propietario'].includes(get().user?.role ?? ''),
 }))
