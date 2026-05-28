@@ -20,25 +20,27 @@ export class GruposService {
 
   // ── CRUD ─────────────────────────────────────────────────────
 
-  async create(dto: CreateGrupoDto, idAccount: string): Promise<Grupo> {
-    // Verificar que la cuenta no tiene ya un grupo (relación 1:1)
+  async create(dto: CreateGrupoDto, idAccount: string | null): Promise<Grupo> {
+  // Solo validar duplicado si tiene cuenta asignada
+  if (idAccount) {
     const existing = await this.repo.findOne({ where: { idAccount } });
     if (existing) {
       throw new ConflictException(
         'Esta cuenta ya tiene un grupo asignado. Solo se permite un grupo por cuenta.',
       );
     }
-
-    const grupo = this.repo.create({
-      nombre:    dto.nombre,
-      ruc:       dto.ruc       || null,
-      direccion: dto.direccion || null,
-      idAccount,
-      status:    'activo',
-    });
-
-    return this.repo.save(grupo);
   }
+
+  const grupo = this.repo.create({
+    nombre:    dto.nombre,
+    ruc:       dto.ruc       || null,
+    direccion: dto.direccion || null,
+    idAccount: idAccount || null,
+    status:    'activo',
+  });
+
+  return this.repo.save(grupo);
+}
 
   // Supervisor ve todos — administrador solo el suyo
   async findAll(idAccount?: string): Promise<Grupo[]> {

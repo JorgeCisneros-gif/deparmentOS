@@ -20,14 +20,12 @@ export class GruposController {
 
   // Supervisor crea grupos para asignar a cuentas
   @Post()
-  @Roles(UserRole.SUPERVISOR)
-  @ApiOperation({ summary: 'Crear grupo (supervisor)' })
-  create(@Body() dto: CreateGrupoDto, @Request() req: any) {
-    // El supervisor crea grupos para otras cuentas
-    // idAccount viene en el body o se asigna luego al vincular con la cuenta
-    const idAccount = req.body?.idAccount || null
-    return this.svc.create(dto, idAccount)
-  }
+@Roles(UserRole.SUPERVISOR)
+@ApiOperation({ summary: 'Crear grupo (supervisor)' })
+create(@Body() dto: CreateGrupoDto, @Request() req: any) {
+  // Supervisor crea grupos sin cuenta — se asigna después al vincular con account
+  return this.svc.create(dto, null)
+}
 
   @Get()
   @Roles(UserRole.ADMINISTRADOR)
