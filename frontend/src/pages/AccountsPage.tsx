@@ -4,7 +4,7 @@ import api from '../services/api'
 import toast from 'react-hot-toast'
 import {
   Plus, Pencil, X, Loader2, Save, KeyRound,
-  CheckCircle2, XCircle, AlertCircle, Trash2,
+  CheckCircle2, XCircle, AlertCircle, Trash2, User,
 } from 'lucide-react'
 
 type Plan   = 'full' | 'demo' | 'standard' | 'premium' | 'enterprise'
@@ -15,13 +15,15 @@ interface Account {
   status: Status; subscriptionStart: string; subscriptionEnd: string | null
   maxEdificios: number; maxDeptos: number; maxPeriodos: number; createdAt: string
 }
-
-interface Grupo { id: string; nombre: string; ruc?: string }
+interface Grupo    { id: string; nombre: string; ruc?: string; edificios?: Building[] }
 interface Building { id: string; nombre: string }
 interface Stats {
   total: number; active: number; expired: number; suspended: number
   byPlan: Record<Plan, number>
 }
+
+// Usuario administrador existente sin cuenta
+interface AdminUser { id: string; email: string; idGrupo?: string; idEdificio?: string }
 
 const PLAN_CFG: Record<Plan, { label: string; color: string; bg: string }> = {
   full:       { label: 'Full',       color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
@@ -37,9 +39,15 @@ const STATUS_CFG = {
   suspended: { label: 'Suspendida', color: 'var(--accent)', Icon: AlertCircle },
 }
 
+// Modo de creación: usuario nuevo o usuario existente
+type CreateMode = 'nuevo' | 'existente'
+
 const EMPTY_FORM = {
   nombre: '', email: '', plan: 'demo' as Plan,
-  subscriptionEnd: '', adminPassword: '', idGrupo: '', idEdificio: '',
+  subscriptionEnd: '', adminPassword: '',
+  idGrupo: '', idEdificio: '',
+  // Para usuario existente
+  idUsuarioExistente: '',
 }
 
 const btn:  React.CSSProperties = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.55rem 1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
@@ -65,9 +73,10 @@ export default function AccountsPage() {
   const [accounts, setAccounts]   = useState<Account[]>([])
   const [stats, setStats]         = useState<Stats | null>(null)
   const [grupos, setGrupos]       = useState<Grupo[]>([])
-  const [buildings, setBuildings] = useState<Building[]>([])
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [loading, setLoading]     = useState(true)
   const [modal, setModal]         = useState(false)
+  const [createMode, setCreateMode] = useState<CreateMode>('nuevo')
   const [editModal, setEditModal] = useState<Account | null>(null)
   const [resetModal, setResetModal] = useState<Account | null>(null)
   const [form, setForm]           = useState(EMPTY_FORM)
@@ -76,41 +85,100 @@ export default function AccountsPage() {
   const [saving, setSaving]       = useState(false)
   const [filter, setFilter]       = useState<Plan | ''>('')
 
+  // Grupo y edificios del usuario existente seleccionado
+  const [selectedUserGrupo, setSelectedUserGrupo]     = useState<Grupo | null>(null)
+  const [selectedUserEdificios, setSelectedUserEdificios] = useState<Building[]>([])
+
   useEffect(() => { load() }, [])
 
   const load = async () => {
     setLoading(true)
     try {
-      const [accRes, statsRes, gruposRes, bldRes] = await Promise.all([
+      const [accRes, statsRes, gruposRes, usersRes] = await Promise.all([
         api.get('/accounts'),
         api.get('/accounts/stats'),
         api.get('/grupos'),
-        api.get('/buildings'),
+        api.get('/users', { params: { role: 'administrador' } }),
       ])
       setAccounts(accRes.data)
       setStats(statsRes.data)
-      setGrupos(gruposRes.data.filter((g: Grupo & any) => g.nombre !== 'SuperGrupo'))
-      setBuildings(bldRes.data)
+      setGrupos(gruposRes.data.filter((g: any) => g.nombre !== 'SuperGrupo'))
+      // Solo admins sin cuenta asignada
+      setAdminUsers(usersRes.data.filter((u: any) => !u.idAccount))
     } catch { toast.error('Error cargando datos') }
     finally  { setLoading(false) }
   }
 
+  // Cuando se selecciona un usuario existente, cargar su grupo y edificios
+  const handleSelectUser = async (userId: string) => {
+    setForm(p => ({ ...p, idUsuarioExistente: userId, idGrupo:'', idEdificio:'' }))
+    setSelectedUserGrupo(null)
+    setSelectedUserEdificios([])
+
+    if (!userId) return
+
+    const user = adminUsers.find(u => u.id === userId)
+    if (!user) return
+
+    // Buscar el grupo asociado al usuario (via su idGrupo si existe)
+    try {
+      const { data: gruposData } = await api.get('/grupos')
+      const grupoReal = gruposData.find((g: any) =>
+        g.nombre !== 'SuperGrupo' && !g.idAccount
+      )
+      // Si el usuario tiene edificio, buscamos el grupo de ese edificio
+      if (user.idEdificio) {
+        const grupoConEdificio = gruposData.find((g: any) =>
+          g.edificios?.some((e: any) => e.id === user.idEdificio)
+        )
+        if (grupoConEdificio) {
+          setSelectedUserGrupo(grupoConEdificio)
+          setSelectedUserEdificios(grupoConEdificio.edificios || [])
+          setForm(p => ({ ...p, idGrupo: grupoConEdificio.id, idEdificio: user.idEdificio || '' }))
+          return
+        }
+      }
+    } catch {}
+  }
+
   const handleCreate = async () => {
-    if (!form.nombre || !form.email || !form.adminPassword) {
-      toast.error('Completa los campos requeridos (*)'); return
-    }
+    if (!form.nombre) { toast.error('El nombre de la cuenta es requerido'); return }
+
     setSaving(true)
     try {
       const payload: any = {
-        nombre: form.nombre, email: form.email,
-        plan: form.plan, adminPassword: form.adminPassword,
+        nombre: form.nombre,
+        plan:   form.plan,
       }
+
       if (form.subscriptionEnd) payload.subscriptionEnd = form.subscriptionEnd
       if (form.idGrupo)         payload.idGrupo         = form.idGrupo
       if (form.idEdificio)      payload.idEdificio       = form.idEdificio
-      await api.post('/accounts', payload)
+
+      if (createMode === 'nuevo') {
+        // Crear cuenta con usuario nuevo
+        if (!form.email || !form.adminPassword) {
+          toast.error('Email y contraseña son requeridos'); setSaving(false); return
+        }
+        payload.email        = form.email
+        payload.adminPassword = form.adminPassword
+        await api.post('/accounts', payload)
+
+      } else {
+        // Asignar cuenta a usuario existente
+        if (!form.idUsuarioExistente) {
+          toast.error('Selecciona un usuario administrador'); setSaving(false); return
+        }
+        payload.idUsuarioExistente = form.idUsuarioExistente
+        payload.email              = adminUsers.find(u => u.id === form.idUsuarioExistente)?.email || ''
+        payload.adminPassword      = 'EXISTING_USER' // señal para el backend
+        await api.post('/accounts', payload)
+      }
+
       toast.success('Cuenta creada correctamente')
-      setModal(false); setForm(EMPTY_FORM); load()
+      setModal(false); setForm(EMPTY_FORM)
+      setSelectedUserGrupo(null); setSelectedUserEdificios([])
+      load()
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Error al crear cuenta')
     } finally { setSaving(false) }
@@ -128,10 +196,10 @@ export default function AccountsPage() {
   }
 
   const handleDelete = async (acc: Account) => {
-    if (!confirm(`¿Eliminar la cuenta "${acc.nombre}" y TODOS sus datos? Esta acción no se puede deshacer.`)) return
+    if (!confirm(`¿Eliminar la cuenta "${acc.nombre}" y TODOS sus datos?\nEsta acción no se puede deshacer.`)) return
     try {
       await api.delete(`/accounts/${acc.id}`)
-      toast.success('Cuenta eliminada correctamente'); load()
+      toast.success('Cuenta eliminada'); load()
     } catch { toast.error('Error al eliminar') }
   }
 
@@ -158,6 +226,11 @@ export default function AccountsPage() {
 
   const filtered = filter ? accounts.filter(a => a.plan === filter) : accounts
 
+  // Edificios disponibles según modo
+  const edificiosDisponibles = createMode === 'existente' && selectedUserEdificios.length > 0
+    ? selectedUserEdificios
+    : grupos.find(g => g.id === form.idGrupo)?.edificios || []
+
   return (
     <div style={{ padding:'2rem', maxWidth:1200, margin:'0 auto' }}>
 
@@ -166,7 +239,7 @@ export default function AccountsPage() {
           <h1 style={{ fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:700,letterSpacing:'-0.02em',marginBottom:'0.25rem' }}>Suscripciones</h1>
           <p style={{ color:'var(--text-secondary)',fontSize:'0.875rem' }}>Gestiona las cuentas y planes de suscripción</p>
         </div>
-        <button style={btn} onClick={() => setModal(true)}><Plus size={16} /> Nueva cuenta</button>
+        <button style={btn} onClick={() => { setModal(true); setCreateMode('nuevo') }}><Plus size={16} /> Nueva cuenta</button>
       </div>
 
       {/* Stats */}
@@ -241,7 +314,7 @@ export default function AccountsPage() {
                           ? <button title="Suspender" onClick={() => handleSuspend(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'var(--accent)',borderColor:'rgba(245,166,35,0.3)' }}><XCircle size={13} /></button>
                           : <button title="Reactivar" onClick={() => handleActivate(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'var(--green)',borderColor:'rgba(76,175,130,0.3)' }}><CheckCircle2 size={13} /></button>
                         }
-                        <button title="Eliminar cuenta" onClick={() => handleDelete(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'#f87171',borderColor:'rgba(248,113,113,0.3)' }}><Trash2 size={13} /></button>
+                        <button title="Eliminar" onClick={() => handleDelete(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'#f87171',borderColor:'rgba(248,113,113,0.3)' }}><Trash2 size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -255,24 +328,30 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* Modal crear */}
+      {/* ── Modal crear cuenta ── */}
       {modal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem' }}>
-          <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto' }}>
+          <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:520,maxHeight:'92vh',overflowY:'auto' }}>
             <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.5rem' }}>
               <h2 style={{ fontFamily:'var(--font-display)',fontSize:'1.3rem',fontWeight:700 }}>Nueva cuenta</h2>
               <button onClick={() => setModal(false)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)' }}><X size={18} /></button>
             </div>
+
+            {/* Toggle modo creación */}
+            <div style={{ display:'flex',gap:'0',marginBottom:'1.5rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)',border:'1px solid var(--border)',padding:'0.2rem' }}>
+              {(['nuevo','existente'] as CreateMode[]).map(mode => (
+                <button key={mode} onClick={() => { setCreateMode(mode); setForm(EMPTY_FORM); setSelectedUserGrupo(null); setSelectedUserEdificios([]) }}
+                  style={{ flex:1,padding:'0.5rem',borderRadius:'calc(var(--radius) - 2px)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)',fontSize:'0.82rem',fontWeight:600,background:createMode===mode?'var(--accent)':'transparent',color:createMode===mode?'#0f1117':'var(--text-secondary)',transition:'all 0.15s' }}>
+                  {mode === 'nuevo' ? '+ Nuevo administrador' : '👤 Usuario existente'}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
               <Field label="Nombre de la cuenta *">
                 <input style={inp} placeholder="Ej. Carlos Izaguirre" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
               </Field>
-              <Field label="Email del administrador *">
-                <input style={inp} type="email" placeholder="admin@edificio.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
-              </Field>
-              <Field label="Contraseña del administrador *">
-                <input style={inp} type="password" placeholder="Mínimo 8 caracteres" value={form.adminPassword} onChange={e => setForm(p => ({ ...p, adminPassword: e.target.value }))} />
-              </Field>
+
               <Field label="Plan *">
                 <select style={inp} value={form.plan} onChange={e => setForm(p => ({ ...p, plan: e.target.value as Plan }))}>
                   {Object.entries(PLAN_CFG).filter(([p]) => p !== 'full').map(([p, cfg]) => (
@@ -280,24 +359,72 @@ export default function AccountsPage() {
                   ))}
                 </select>
               </Field>
+
               {['standard','premium','enterprise'].includes(form.plan) && (
                 <Field label="Fecha de vencimiento">
                   <input style={inp} type="date" value={form.subscriptionEnd} onChange={e => setForm(p => ({ ...p, subscriptionEnd: e.target.value }))} />
                 </Field>
               )}
-              <Field label="Grupo asignado" hint="El grupo debe crearse primero en la sección Grupos.">
-                <select style={inp} value={form.idGrupo} onChange={e => setForm(p => ({ ...p, idGrupo: e.target.value }))}>
-                  <option value="">— Sin grupo —</option>
-                  {grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}{g.ruc ? ` (${g.ruc})` : ''}</option>)}
-                </select>
-              </Field>
-              <Field label="Edificio existente (opcional)" hint="Si se selecciona, el admin quedará vinculado a este edificio.">
-                <select style={inp} value={form.idEdificio} onChange={e => setForm(p => ({ ...p, idEdificio: e.target.value }))}>
-                  <option value="">— Sin edificio —</option>
-                  {buildings.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
-                </select>
-              </Field>
+
+              {/* ── Modo: nuevo administrador ── */}
+              {createMode === 'nuevo' && (
+                <>
+                  <Field label="Email del administrador *">
+                    <input style={inp} type="email" placeholder="admin@edificio.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+                  </Field>
+                  <Field label="Contraseña del administrador *">
+                    <input style={inp} type="password" placeholder="Mínimo 8 caracteres" value={form.adminPassword} onChange={e => setForm(p => ({ ...p, adminPassword: e.target.value }))} />
+                  </Field>
+                  <Field label="Grupo asignado" hint="Crea el grupo primero en la sección Grupos.">
+                    <select style={inp} value={form.idGrupo} onChange={e => setForm(p => ({ ...p, idGrupo: e.target.value, idEdificio:'' }))}>
+                      <option value="">— Sin grupo —</option>
+                      {grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}{g.ruc ? ` (${g.ruc})` : ''}</option>)}
+                    </select>
+                  </Field>
+                </>
+              )}
+
+              {/* ── Modo: usuario existente ── */}
+              {createMode === 'existente' && (
+                <>
+                  <Field label="Administrador existente *" hint="Solo se muestran administradores sin suscripción asignada.">
+                    <select style={inp} value={form.idUsuarioExistente} onChange={e => handleSelectUser(e.target.value)}>
+                      <option value="">— Seleccionar usuario —</option>
+                      {adminUsers.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
+                    </select>
+                  </Field>
+
+                  {/* Grupo auto-detectado */}
+                  {selectedUserGrupo && (
+                    <div style={{ background:'rgba(76,175,130,0.07)',border:'1px solid rgba(76,175,130,0.2)',borderRadius:'var(--radius)',padding:'0.75rem 1rem' }}>
+                      <p style={{ fontSize:'0.72rem',color:'var(--text-muted)',marginBottom:'0.2rem',textTransform:'uppercase',letterSpacing:'0.04em' }}>Grupo detectado</p>
+                      <p style={{ fontWeight:600,color:'var(--green)' }}>✓ {selectedUserGrupo.nombre}</p>
+                    </div>
+                  )}
+
+                  {/* Si no tiene grupo, permitir seleccionar uno */}
+                  {form.idUsuarioExistente && !selectedUserGrupo && (
+                    <Field label="Asignar grupo" hint="Este administrador no tiene grupo asignado aún.">
+                      <select style={inp} value={form.idGrupo} onChange={e => setForm(p => ({ ...p, idGrupo: e.target.value, idEdificio:'' }))}>
+                        <option value="">— Sin grupo —</option>
+                        {grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                      </select>
+                    </Field>
+                  )}
+                </>
+              )}
+
+              {/* Selector de edificio (ambos modos) */}
+              {edificiosDisponibles.length > 0 && (
+                <Field label="Edificio (opcional)" hint="Si se selecciona, el administrador quedará vinculado a este edificio.">
+                  <select style={inp} value={form.idEdificio} onChange={e => setForm(p => ({ ...p, idEdificio: e.target.value }))}>
+                    <option value="">— Sin edificio específico —</option>
+                    {edificiosDisponibles.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+                  </select>
+                </Field>
+              )}
             </div>
+
             <div style={{ display:'flex',gap:'0.75rem',marginTop:'1.5rem',justifyContent:'flex-end' }}>
               <button style={btn2} onClick={() => setModal(false)}>Cancelar</button>
               <button style={btn} onClick={handleCreate} disabled={saving}>
@@ -348,7 +475,9 @@ export default function AccountsPage() {
               <h2 style={{ fontFamily:'var(--font-display)',fontSize:'1.3rem',fontWeight:700 }}>Resetear contraseña</h2>
               <button onClick={() => setResetModal(null)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)' }}><X size={18} /></button>
             </div>
-            <p style={{ color:'var(--text-muted)',fontSize:'0.875rem',marginBottom:'1rem' }}>Cuenta: <strong style={{ color:'var(--text-primary)' }}>{resetModal.nombre}</strong></p>
+            <p style={{ color:'var(--text-muted)',fontSize:'0.875rem',marginBottom:'1rem' }}>
+              Cuenta: <strong style={{ color:'var(--text-primary)' }}>{resetModal.nombre}</strong>
+            </p>
             <Field label="Nueva contraseña *">
               <input style={inp} type="password" placeholder="Mínimo 8 caracteres" value={resetPwd} onChange={e => setResetPwd(e.target.value)} />
             </Field>
