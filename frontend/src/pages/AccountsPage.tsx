@@ -4,34 +4,25 @@ import api from '../services/api'
 import toast from 'react-hot-toast'
 import {
   Plus, Pencil, X, Loader2, Save, KeyRound,
-  CheckCircle2, XCircle, AlertCircle,
+  CheckCircle2, XCircle, AlertCircle, Trash2,
 } from 'lucide-react'
 
-// ── Tipos ─────────────────────────────────────────────────────────────────────
+type Plan   = 'full' | 'demo' | 'standard' | 'premium' | 'enterprise'
+type Status = 'active' | 'expired' | 'suspended'
+
 interface Account {
-  id:                string
-  nombre:            string
-  email:             string
-  plan:              Plan
-  status:            'active' | 'expired' | 'suspended'
-  subscriptionStart: string
-  subscriptionEnd:   string | null
-  maxEdificios:      number
-  maxDeptos:         number
-  maxPeriodos:       number
-  createdAt:         string
+  id: string; nombre: string; email: string; plan: Plan
+  status: Status; subscriptionStart: string; subscriptionEnd: string | null
+  maxEdificios: number; maxDeptos: number; maxPeriodos: number; createdAt: string
 }
 
+interface Grupo { id: string; nombre: string; ruc?: string }
 interface Building { id: string; nombre: string }
-
 interface Stats {
   total: number; active: number; expired: number; suspended: number
   byPlan: Record<Plan, number>
 }
 
-type Plan = 'full' | 'demo' | 'standard' | 'premium' | 'enterprise'
-
-// ── Config visual ─────────────────────────────────────────────────────────────
 const PLAN_CFG: Record<Plan, { label: string; color: string; bg: string }> = {
   full:       { label: 'Full',       color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
   demo:       { label: 'Demo',       color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
@@ -48,20 +39,17 @@ const STATUS_CFG = {
 
 const EMPTY_FORM = {
   nombre: '', email: '', plan: 'demo' as Plan,
-  subscriptionEnd: '', adminPassword: '', idEdificio: '',
+  subscriptionEnd: '', adminPassword: '', idGrupo: '', idEdificio: '',
 }
 
-// ── Estilos base ──────────────────────────────────────────────────────────────
-const btn: React.CSSProperties  = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.55rem 1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
+const btn:  React.CSSProperties = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.55rem 1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
 const btn2: React.CSSProperties = { ...btn, background:'var(--bg-elevated)',color:'var(--text-secondary)',border:'1px solid var(--border)' }
-const inp: React.CSSProperties  = { width:'100%',background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
+const inp:  React.CSSProperties = { width:'100%',background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.35rem' }}>
-        {label}
-      </label>
+      <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.35rem' }}>{label}</label>
       {children}
       {hint && <p style={{ fontSize:'0.72rem',color:'var(--text-muted)',marginTop:'0.25rem' }}>{hint}</p>}
     </div>
@@ -70,24 +58,20 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function PlanBadge({ plan }: { plan: Plan }) {
   const cfg = PLAN_CFG[plan]
-  return (
-    <span style={{ fontSize:'0.72rem',fontWeight:700,padding:'0.2rem 0.6rem',borderRadius:20,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}40`,textTransform:'uppercase',letterSpacing:'0.05em' }}>
-      {cfg.label}
-    </span>
-  )
+  return <span style={{ fontSize:'0.72rem',fontWeight:700,padding:'0.2rem 0.6rem',borderRadius:20,background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.color}40`,textTransform:'uppercase',letterSpacing:'0.05em' }}>{cfg.label}</span>
 }
 
-// ── Página ────────────────────────────────────────────────────────────────────
 export default function AccountsPage() {
   const [accounts, setAccounts]   = useState<Account[]>([])
   const [stats, setStats]         = useState<Stats | null>(null)
+  const [grupos, setGrupos]       = useState<Grupo[]>([])
   const [buildings, setBuildings] = useState<Building[]>([])
   const [loading, setLoading]     = useState(true)
   const [modal, setModal]         = useState(false)
   const [editModal, setEditModal] = useState<Account | null>(null)
   const [resetModal, setResetModal] = useState<Account | null>(null)
   const [form, setForm]           = useState(EMPTY_FORM)
-  const [editForm, setEditForm]   = useState<Partial<Account & { subscriptionEnd: string }>>({})
+  const [editForm, setEditForm]   = useState<any>({})
   const [resetPwd, setResetPwd]   = useState('')
   const [saving, setSaving]       = useState(false)
   const [filter, setFilter]       = useState<Plan | ''>('')
@@ -97,13 +81,15 @@ export default function AccountsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const [accRes, statsRes, bldRes] = await Promise.all([
+      const [accRes, statsRes, gruposRes, bldRes] = await Promise.all([
         api.get('/accounts'),
         api.get('/accounts/stats'),
+        api.get('/grupos'),
         api.get('/buildings'),
       ])
       setAccounts(accRes.data)
       setStats(statsRes.data)
+      setGrupos(gruposRes.data.filter((g: Grupo & any) => g.nombre !== 'SuperGrupo'))
       setBuildings(bldRes.data)
     } catch { toast.error('Error cargando datos') }
     finally  { setLoading(false) }
@@ -116,14 +102,12 @@ export default function AccountsPage() {
     setSaving(true)
     try {
       const payload: any = {
-        nombre:        form.nombre,
-        email:         form.email,
-        plan:          form.plan,
-        adminPassword: form.adminPassword,
+        nombre: form.nombre, email: form.email,
+        plan: form.plan, adminPassword: form.adminPassword,
       }
-      if (form.subscriptionEnd)  payload.subscriptionEnd = form.subscriptionEnd
-      if (form.idEdificio)       payload.idEdificio      = form.idEdificio
-
+      if (form.subscriptionEnd) payload.subscriptionEnd = form.subscriptionEnd
+      if (form.idGrupo)         payload.idGrupo         = form.idGrupo
+      if (form.idEdificio)      payload.idEdificio       = form.idEdificio
       await api.post('/accounts', payload)
       toast.success('Cuenta creada correctamente')
       setModal(false); setForm(EMPTY_FORM); load()
@@ -137,38 +121,38 @@ export default function AccountsPage() {
     setSaving(true)
     try {
       await api.patch(`/accounts/${editModal.id}`, editForm)
-      toast.success('Cuenta actualizada')
-      setEditModal(null); load()
+      toast.success('Cuenta actualizada'); setEditModal(null); load()
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Error al actualizar')
     } finally { setSaving(false) }
   }
 
-  const handleSuspend = async (acc: Account) => {
-    if (!confirm(`¿Suspender la cuenta "${acc.nombre}"?`)) return
+  const handleDelete = async (acc: Account) => {
+    if (!confirm(`¿Eliminar la cuenta "${acc.nombre}" y TODOS sus datos? Esta acción no se puede deshacer.`)) return
     try {
-      await api.patch(`/accounts/${acc.id}/suspend`)
-      toast.success('Cuenta suspendida'); load()
-    } catch { toast.error('Error al suspender') }
+      await api.delete(`/accounts/${acc.id}`)
+      toast.success('Cuenta eliminada correctamente'); load()
+    } catch { toast.error('Error al eliminar') }
+  }
+
+  const handleSuspend  = async (acc: Account) => {
+    if (!confirm(`¿Suspender "${acc.nombre}"?`)) return
+    try { await api.patch(`/accounts/${acc.id}/suspend`);  toast.success('Suspendida');  load() }
+    catch { toast.error('Error') }
   }
 
   const handleActivate = async (acc: Account) => {
-    try {
-      await api.patch(`/accounts/${acc.id}/activate`)
-      toast.success('Cuenta reactivada'); load()
-    } catch { toast.error('Error al reactivar') }
+    try { await api.patch(`/accounts/${acc.id}/activate`); toast.success('Reactivada'); load() }
+    catch { toast.error('Error') }
   }
 
   const handleResetPassword = async () => {
-    if (!resetModal || !resetPwd || resetPwd.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres'); return
-    }
+    if (!resetModal || resetPwd.length < 8) { toast.error('Mínimo 8 caracteres'); return }
     setSaving(true)
     try {
       await api.patch(`/accounts/${resetModal.id}/reset-password`, { newPassword: resetPwd })
-      toast.success('Contraseña reseteada correctamente')
-      setResetModal(null); setResetPwd('')
-    } catch { toast.error('Error al resetear contraseña') }
+      toast.success('Contraseña reseteada'); setResetModal(null); setResetPwd('')
+    } catch { toast.error('Error al resetear') }
     finally { setSaving(false) }
   }
 
@@ -177,7 +161,6 @@ export default function AccountsPage() {
   return (
     <div style={{ padding:'2rem', maxWidth:1200, margin:'0 auto' }}>
 
-      {/* Header */}
       <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem' }} className="fade-up">
         <div>
           <h1 style={{ fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:700,letterSpacing:'-0.02em',marginBottom:'0.25rem' }}>Suscripciones</h1>
@@ -219,9 +202,7 @@ export default function AccountsPage() {
 
       {/* Tabla */}
       {loading ? (
-        <div style={{ display:'flex',justifyContent:'center',padding:'4rem' }}>
-          <Loader2 size={28} color="var(--accent)" style={{ animation:'spin 0.8s linear infinite' }} />
-        </div>
+        <div style={{ display:'flex',justifyContent:'center',padding:'4rem' }}><Loader2 size={28} color="var(--accent)" style={{ animation:'spin 0.8s linear infinite' }} /></div>
       ) : (
         <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',overflow:'auto' }} className="fade-up">
           <table style={{ width:'100%',borderCollapse:'collapse',fontSize:'0.875rem' }}>
@@ -234,7 +215,7 @@ export default function AccountsPage() {
             </thead>
             <tbody>
               {filtered.map((acc, i) => {
-                const stCfg      = STATUS_CFG[acc.status]
+                const stCfg = STATUS_CFG[acc.status]
                 const StatusIcon = stCfg.Icon
                 return (
                   <tr key={acc.id} style={i%2!==0 ? {background:'rgba(255,255,255,0.02)'} : {}}>
@@ -244,12 +225,10 @@ export default function AccountsPage() {
                     </td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}><PlanBadge plan={acc.plan} /></td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-                      <span style={{ display:'flex',alignItems:'center',gap:'0.3rem',fontSize:'0.78rem',color:stCfg.color,fontWeight:600 }}>
-                        <StatusIcon size={13} /> {stCfg.label}
-                      </span>
+                      <span style={{ display:'flex',alignItems:'center',gap:'0.3rem',fontSize:'0.78rem',color:stCfg.color,fontWeight:600 }}><StatusIcon size={13} /> {stCfg.label}</span>
                     </td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxEdificios >= 9999 ? '∞' : acc.maxEdificios}</span></td>
-                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxDeptos    >= 9999 ? '∞' : acc.maxDeptos}</span></td>
+                    <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxDeptos >= 9999 ? '∞' : acc.maxDeptos}</span></td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',textAlign:'center' as const }}><span style={{ fontWeight:700 }}>{acc.maxPeriodos >= 9999 ? '∞' : acc.maxPeriodos}</span></td>
                     <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',color:'var(--text-muted)',fontSize:'0.82rem' }}>
                       {acc.subscriptionEnd ? new Date(acc.subscriptionEnd).toLocaleDateString('es-PE') : '—'}
@@ -259,9 +238,10 @@ export default function AccountsPage() {
                         <button title="Editar" onClick={() => { setEditModal(acc); setEditForm({ plan: acc.plan, subscriptionEnd: acc.subscriptionEnd || '' }) }} style={{ ...btn2, padding:'0.3rem 0.5rem' }}><Pencil size={13} /></button>
                         <button title="Reset contraseña" onClick={() => { setResetModal(acc); setResetPwd('') }} style={{ ...btn2, padding:'0.3rem 0.5rem' }}><KeyRound size={13} /></button>
                         {acc.status === 'active'
-                          ? <button title="Suspender" onClick={() => handleSuspend(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'#f87171',borderColor:'rgba(248,113,113,0.3)' }}><XCircle size={13} /></button>
+                          ? <button title="Suspender" onClick={() => handleSuspend(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'var(--accent)',borderColor:'rgba(245,166,35,0.3)' }}><XCircle size={13} /></button>
                           : <button title="Reactivar" onClick={() => handleActivate(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'var(--green)',borderColor:'rgba(76,175,130,0.3)' }}><CheckCircle2 size={13} /></button>
                         }
+                        <button title="Eliminar cuenta" onClick={() => handleDelete(acc)} style={{ ...btn2, padding:'0.3rem 0.5rem',color:'#f87171',borderColor:'rgba(248,113,113,0.3)' }}><Trash2 size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -275,7 +255,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* ── Modal crear cuenta ── */}
+      {/* Modal crear */}
       {modal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem' }}>
           <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto' }}>
@@ -285,7 +265,7 @@ export default function AccountsPage() {
             </div>
             <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
               <Field label="Nombre de la cuenta *">
-                <input style={inp} placeholder="Ej. Edificio Los Pinos" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
+                <input style={inp} placeholder="Ej. Carlos Izaguirre" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} />
               </Field>
               <Field label="Email del administrador *">
                 <input style={inp} type="email" placeholder="admin@edificio.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
@@ -305,19 +285,16 @@ export default function AccountsPage() {
                   <input style={inp} type="date" value={form.subscriptionEnd} onChange={e => setForm(p => ({ ...p, subscriptionEnd: e.target.value }))} />
                 </Field>
               )}
-              <Field
-                label="Edificio existente (opcional)"
-                hint="Si se selecciona, el administrador quedará asociado a este edificio."
-              >
-                <select
-                  style={inp}
-                  value={form.idEdificio}
-                  onChange={e => setForm(p => ({ ...p, idEdificio: e.target.value }))}
-                >
-                  <option value="">— Sin edificio asignado —</option>
-                  {buildings.map(b => (
-                    <option key={b.id} value={b.id}>{b.nombre}</option>
-                  ))}
+              <Field label="Grupo asignado" hint="El grupo debe crearse primero en la sección Grupos.">
+                <select style={inp} value={form.idGrupo} onChange={e => setForm(p => ({ ...p, idGrupo: e.target.value }))}>
+                  <option value="">— Sin grupo —</option>
+                  {grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}{g.ruc ? ` (${g.ruc})` : ''}</option>)}
+                </select>
+              </Field>
+              <Field label="Edificio existente (opcional)" hint="Si se selecciona, el admin quedará vinculado a este edificio.">
+                <select style={inp} value={form.idEdificio} onChange={e => setForm(p => ({ ...p, idEdificio: e.target.value }))}>
+                  <option value="">— Sin edificio —</option>
+                  {buildings.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
                 </select>
               </Field>
             </div>
@@ -332,7 +309,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* ── Modal editar ── */}
+      {/* Modal editar */}
       {editModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem' }}>
           <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:420 }}>
@@ -342,14 +319,14 @@ export default function AccountsPage() {
             </div>
             <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
               <Field label="Plan">
-                <select style={inp} value={editForm.plan || ''} onChange={e => setEditForm(p => ({ ...p, plan: e.target.value as Plan }))}>
+                <select style={inp} value={editForm.plan || ''} onChange={e => setEditForm((p: any) => ({ ...p, plan: e.target.value }))}>
                   {Object.entries(PLAN_CFG).filter(([p]) => p !== 'full').map(([p, cfg]) => (
                     <option key={p} value={p}>{cfg.label}</option>
                   ))}
                 </select>
               </Field>
               <Field label="Fecha de vencimiento">
-                <input style={inp} type="date" value={editForm.subscriptionEnd || ''} onChange={e => setEditForm(p => ({ ...p, subscriptionEnd: e.target.value }))} />
+                <input style={inp} type="date" value={editForm.subscriptionEnd || ''} onChange={e => setEditForm((p: any) => ({ ...p, subscriptionEnd: e.target.value }))} />
               </Field>
             </div>
             <div style={{ display:'flex',gap:'0.75rem',marginTop:'1.5rem',justifyContent:'flex-end' }}>
@@ -363,7 +340,7 @@ export default function AccountsPage() {
         </div>
       )}
 
-      {/* ── Modal reset contraseña ── */}
+      {/* Modal reset contraseña */}
       {resetModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem' }}>
           <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'2rem',width:'100%',maxWidth:400 }}>
@@ -371,9 +348,7 @@ export default function AccountsPage() {
               <h2 style={{ fontFamily:'var(--font-display)',fontSize:'1.3rem',fontWeight:700 }}>Resetear contraseña</h2>
               <button onClick={() => setResetModal(null)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)' }}><X size={18} /></button>
             </div>
-            <p style={{ color:'var(--text-muted)',fontSize:'0.875rem',marginBottom:'1rem' }}>
-              Cuenta: <strong style={{ color:'var(--text-primary)' }}>{resetModal.nombre}</strong>
-            </p>
+            <p style={{ color:'var(--text-muted)',fontSize:'0.875rem',marginBottom:'1rem' }}>Cuenta: <strong style={{ color:'var(--text-primary)' }}>{resetModal.nombre}</strong></p>
             <Field label="Nueva contraseña *">
               <input style={inp} type="password" placeholder="Mínimo 8 caracteres" value={resetPwd} onChange={e => setResetPwd(e.target.value)} />
             </Field>
@@ -387,7 +362,6 @@ export default function AccountsPage() {
           </div>
         </div>
       )}
-
     </div>
   )
 }

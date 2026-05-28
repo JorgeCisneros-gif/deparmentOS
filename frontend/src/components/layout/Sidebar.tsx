@@ -85,6 +85,7 @@ const NAV_GROUPS: NavGroup[] = [
     allowedRoles: SUPERVISOR_ONLY,
     items: [
       { to: '/accounts', icon: <Layers size={16} />, label: 'Suscripciones', allowedRoles: SUPERVISOR_ONLY },
+      { to: '/grupos', icon: <Layers size={16} />, label: 'Grupos', allowedRoles: SUPERVISOR_ONLY },
     ],
   },
 ]

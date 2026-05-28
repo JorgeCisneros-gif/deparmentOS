@@ -1,3 +1,4 @@
+// src/accounts/accounts.service.ts
 import {
   Injectable, NotFoundException, ConflictException,
   BadRequestException, ForbiddenException,
@@ -17,15 +18,12 @@ export class AccountsService {
     private readonly repo: Repository<Account>,
   ) {}
 
-  // ── CRUD ─────────────────────────────────────────────────────
-
   async create(dto: CreateAccountDto, supervisorId: string): Promise<Account> {
     const exists = await this.repo.findOne({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Ya existe una cuenta con ese email');
 
     const limits = PLAN_LIMITS[dto.plan];
 
-    // Calcular fecha de fin automáticamente para plan DEMO
     let subscriptionEnd = dto.subscriptionEnd || null;
     if (dto.plan === SubscriptionPlan.DEMO && !subscriptionEnd) {
       const end = new Date();
@@ -34,15 +32,15 @@ export class AccountsService {
     }
 
     const account = this.repo.create({
-      nombre:            dto.nombre,
-      email:             dto.email,
-      plan:              dto.plan,
-      status:            SubscriptionStatus.ACTIVE,
+      nombre:         dto.nombre,
+      email:          dto.email,
+      plan:           dto.plan,
+      status:         SubscriptionStatus.ACTIVE,
       subscriptionEnd,
-      maxEdificios:      limits.maxEdificios,
-      maxDeptos:         limits.maxDeptos,
-      maxPeriodos:       limits.maxPeriodos,
-      createdBy:         supervisorId,
+      maxEdificios:   limits.maxEdificios,
+      maxDeptos:      limits.maxDeptos,
+      maxPeriodos:    limits.maxPeriodos,
+      createdBy:      supervisorId,
     });
 
     return this.repo.save(account);
@@ -58,17 +56,15 @@ export class AccountsService {
     return acc;
   }
 
-  async update(id: string, dto: UpdateAccountDto): Promise<Account> {
+  async update(id: string, dto: UpdateAccountDto | any): Promise<Account> {
     const acc = await this.findOne(id);
 
-    // Si cambia el plan, actualizar límites automáticamente
     if (dto.plan && dto.plan !== acc.plan) {
       const limits = PLAN_LIMITS[dto.plan];
       acc.maxEdificios = limits.maxEdificios;
       acc.maxDeptos    = limits.maxDeptos;
       acc.maxPeriodos  = limits.maxPeriodos;
 
-      // Auto-calcular fecha fin para DEMO
       if (dto.plan === SubscriptionPlan.DEMO && !dto.subscriptionEnd) {
         const end = new Date();
         end.setDate(end.getDate() + 90);
@@ -92,10 +88,28 @@ export class AccountsService {
     return this.repo.save(acc);
   }
 
-  // ── Reset de contraseña del administrador de la cuenta ───────
+  // Eliminar cuenta en cascada — grupos, edificios, usuarios, etc.
+  // La cascada se maneja por FK en la BD (ON DELETE CASCADE)
+  async remove(id: string): Promise<{ message: string }> {
+    const acc = await this.findOne(id);
+
+    // Eliminar usuarios de la cuenta primero
+    await this.repo.query(
+      `DELETE FROM users WHERE id_account = $1`, [id]
+    );
+
+    // Eliminar el grupo (cascade borrará edificios → deptos → mediciones → pagos)
+    await this.repo.query(
+      `DELETE FROM grupos WHERE id_account = $1`, [id]
+    );
+
+    // Eliminar la cuenta
+    await this.repo.remove(acc);
+
+    return { message: 'Cuenta eliminada correctamente' };
+  }
 
   async resetAdminPassword(accountId: string, dto: ResetAccountPasswordDto): Promise<void> {
-    // Buscar el usuario administrador de la cuenta
     const adminUser = await this.repo.query(
       `SELECT id FROM users WHERE id_account = $1 AND role = 'administrador' LIMIT 1`,
       [accountId],
@@ -125,7 +139,7 @@ export class AccountsService {
 
     if (parseInt(count) >= acc.maxEdificios) {
       throw new ForbiddenException(
-        `Límite de edificios alcanzado (${acc.maxEdificios}). Actualiza tu plan para agregar más.`,
+        `Límite de edificios alcanzado (${acc.maxEdificios}). Actualiza tu plan.`,
       );
     }
   }
@@ -141,7 +155,7 @@ export class AccountsService {
 
     if (parseInt(count) >= acc.maxDeptos) {
       throw new ForbiddenException(
-        `Límite de departamentos alcanzado (${acc.maxDeptos}). Actualiza tu plan para agregar más.`,
+        `Límite de departamentos alcanzado (${acc.maxDeptos}). Actualiza tu plan.`,
       );
     }
   }
@@ -150,7 +164,6 @@ export class AccountsService {
     const acc = await this.findOne(accountId);
     this.assertActive(acc);
 
-    // Cuenta períodos únicos registrados en el edificio
     const [{ count }] = await this.repo.query(
       `SELECT COUNT(DISTINCT (rs.periodo_mes || '-' || rs.periodo_anio)) as count
        FROM recibos_servicio rs
@@ -161,26 +174,21 @@ export class AccountsService {
 
     if (parseInt(count) >= acc.maxPeriodos) {
       throw new ForbiddenException(
-        `Límite de períodos alcanzado (${acc.maxPeriodos}). Actualiza tu plan para registrar más meses.`,
+        `Límite de períodos alcanzado (${acc.maxPeriodos}). Actualiza tu plan.`,
       );
     }
   }
-
-  // ── Helper privado ────────────────────────────────────────────
 
   private assertActive(acc: Account): void {
     if (acc.status === SubscriptionStatus.SUSPENDED) {
       throw new ForbiddenException('Cuenta suspendida. Contacta al administrador.');
     }
     if (acc.status === SubscriptionStatus.EXPIRED || acc.isExpired()) {
-      // Auto-marcar como expirada
       acc.status = SubscriptionStatus.EXPIRED;
       this.repo.save(acc);
-      throw new ForbiddenException('Suscripción vencida. Renueva tu plan para continuar.');
+      throw new ForbiddenException('Suscripción vencida. Renueva tu plan.');
     }
   }
-
-  // ── Stats para el panel del supervisor ───────────────────────
 
   async getStats(): Promise<any> {
     const accounts = await this.findAll();

@@ -11,40 +11,58 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { SubscriptionGuard, SubscriptionCheck } from '../auth/guards/subscription.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user.entity';
+import { GruposService } from '../grupos/grupos.service';
 
 @ApiTags('Buildings')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('buildings')
 export class BuildingsController {
-  constructor(private readonly svc: BuildingsService) {}
+  constructor(
+    private readonly svc:       BuildingsService,
+    private readonly gruposSvc: GruposService,
+  ) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
+  @Roles(UserRole.ADMINISTRADOR)
   @UseGuards(SubscriptionGuard)
-  @SubscriptionCheck('edificios')  // valida límite según plan
+  @SubscriptionCheck('edificios')
   @ApiOperation({ summary: 'Crear edificio' })
-  create(@Body() dto: CreateBuildingDto, @Request() req: any) {
-    // Si es administrador, asociar el edificio a su cuenta
+  async create(@Body() dto: CreateBuildingDto, @Request() req: any) {
+    // Asociar a la cuenta
     if (req.user.idAccount) {
       dto['idAccount'] = req.user.idAccount;
     }
+
+    // Auto-asignar al grupo de la cuenta si no viene en el body
+    if (!dto['idGrupo'] && req.user.idAccount) {
+      const grupo = await this.gruposSvc.findByAccount(req.user.idAccount);
+      if (grupo) dto['idGrupo'] = grupo.id;
+    }
+
+    // Supervisor: asignar al SuperGrupo si no viene grupo
+    if (req.user.role === UserRole.SUPERVISOR && !dto['idGrupo']) {
+      const superGrupo = await this.gruposSvc.getSuperGrupo();
+      if (superGrupo) dto['idGrupo'] = superGrupo.id;
+    }
+
     return this.svc.create(dto);
   }
 
   @Get()
-  @Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Listar edificios' })
-  findAll(@Request() req: any) {
-    // Supervisor ve todos — administrador solo los de su cuenta
-    const accountId = req.user.role === UserRole.SUPERVISOR
-      ? undefined
-      : req.user.idAccount;
-    return this.svc.findAll(accountId);
+  async findAll(@Request() req: any) {
+    if (req.user.role === UserRole.SUPERVISOR) {
+      return this.svc.findAll(); // todos
+    }
+    // Administrador — edificios de su grupo
+    const grupo = await this.gruposSvc.findByAccount(req.user.idAccount);
+    return this.svc.findByGrupo(grupo?.id);
   }
 
   @Get(':id')
-  @Roles(UserRole.PROPIETARIO)     // todos los roles
+  @Roles(UserRole.PROPIETARIO)
   @ApiOperation({ summary: 'Ver edificio' })
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
@@ -58,7 +76,7 @@ export class BuildingsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.SUPERVISOR)      // solo supervisor puede eliminar
+  @Roles(UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'Eliminar edificio' })
   remove(@Param('id') id: string) {
     return this.svc.remove(id);

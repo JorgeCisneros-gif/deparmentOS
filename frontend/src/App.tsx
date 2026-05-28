@@ -21,7 +21,7 @@ import UsersPage from './pages/UsersPage'
 import PropietarioDashboard from './pages/PropietarioDashboard'
 import PropietarioPagosPage from './pages/PropietarioPagosPage'
 import AccountsPage from './pages/AccountsPage'   // ← nuevo
-
+import GruposPage from './pages/GruposPage'
 // ── Guards de ruta ────────────────────────────────────────────────────────────
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -96,7 +96,7 @@ export default function App() {
           <Route path="owners"       element={<ManageRoute><OwnersPage /></ManageRoute>} />
           <Route path="owners/new"    element={<ManageRoute><OwnerFormPage /></ManageRoute>} />
           <Route path="owners/:id/edit" element={<ManageRoute><OwnerFormPage /></ManageRoute>} />
-
+          <Route path="grupos" element={<SupervisorRoute><GruposPage /></SupervisorRoute>} />
           {/* ── Supervisor + Administrador + Gestión ── */}
           <Route path="readings/new" element={<OperateRoute><NewReadingPage /></OperateRoute>} />
           <Route path="cobros"       element={<OperateRoute><CobrosPage /></OperateRoute>} />

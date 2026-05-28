@@ -1,11 +1,13 @@
 // src/buildings/building.entity.ts
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn,
+  CreateDateColumn, UpdateDateColumn,
+  OneToMany, ManyToOne, JoinColumn,
 } from 'typeorm';
 import { Department } from '../departments/department.entity';
 import { Service }    from '../services/service.entity';
 import { Pais }       from '../paises/pais.entity';
+import { Grupo }      from '../grupos/grupo.entity';
 
 @Entity('edificios')
 export class Building {
@@ -50,14 +52,22 @@ export class Building {
   @Column({ length: 10, default: 'es-PE' })
   locale: string;
 
-  // ── Cuenta de suscripción (null = pertenece al supervisor global) ──
+  // ── Relación con cuenta (para límites de suscripción) ────────
   @Column({ name: 'id_account', nullable: true })
   idAccount: string | null;
 
-  @OneToMany(() => Department, (d) => d.edificio)
+  // ── Relación con grupo ───────────────────────────────────────
+  @Column({ name: 'id_grupo', nullable: true })
+  idGrupo: string | null;
+
+  @ManyToOne(() => Grupo, g => g.edificios, { nullable: true, eager: false })
+  @JoinColumn({ name: 'id_grupo' })
+  grupo: Grupo;
+
+  @OneToMany(() => Department, d => d.edificio)
   departamentos: Department[];
 
-  @OneToMany(() => Service, (s) => s.edificio)
+  @OneToMany(() => Service, s => s.edificio)
   servicios: Service[];
 
   @CreateDateColumn({ name: 'created_at' })

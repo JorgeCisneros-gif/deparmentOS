@@ -16,16 +16,37 @@ export class BuildingsService {
     return this.repo.save(this.repo.create(dto));
   }
 
-  // accountId filtra por cuenta — undefined = supervisor ve todos
-  findAll(accountId?: string) {
-    const where = accountId ? { idAccount: accountId } : {};
-    return this.repo.find({ where, order: { nombre: 'ASC' } });
+  // Sin filtro = supervisor ve todos
+  findAll() {
+    return this.repo.find({
+      order: { nombre: 'ASC' },
+      relations: ['grupo'],
+    });
+  }
+
+  // Filtrar por grupo (para administrador)
+  findByGrupo(idGrupo?: string) {
+    if (!idGrupo) return [];
+    return this.repo.find({
+      where: { idGrupo },
+      order: { nombre: 'ASC' },
+      relations: ['grupo'],
+    });
+  }
+
+  // Filtrar por account (para SubscriptionGuard)
+  findByAccount(idAccount?: string) {
+    if (!idAccount) return this.findAll();
+    return this.repo.find({
+      where: { idAccount },
+      order: { nombre: 'ASC' },
+    });
   }
 
   async findOne(id: string) {
     const b = await this.repo.findOne({
       where: { id },
-      relations: ['departamentos', 'servicios'],
+      relations: ['departamentos', 'servicios', 'grupo'],
     });
     if (!b) throw new NotFoundException('Edificio no encontrado');
     return b;
