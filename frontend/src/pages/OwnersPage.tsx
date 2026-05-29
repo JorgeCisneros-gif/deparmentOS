@@ -141,13 +141,13 @@ export default function OwnersPage() {
     try {
       // 1. Crear el propietario
       const { data: newOwner } = await api.post('/propietarios', {
-        nombre:           form.nombre,
-        telefono:         form.telefono,
-        correo:           form.correo,
-        banco:            form.banco,
-        tipo_pago:        form.tipo_pago,
-        idDepartamento:   form.idDepartamento,
-      })
+  nombre:         form.nombre,
+  telefono:       form.telefono,
+  correo:         form.correo,
+  banco:          form.banco.toLowerCase(),        // ← lowercase
+  tipoPago:       form.tipo_pago,                  // ← camelCase
+  idDepartamento: form.idDepartamento,
+})
 
       // 2. Crear el usuario de tipo propietario automáticamente
       await api.post('/users', {
@@ -171,7 +171,16 @@ export default function OwnersPage() {
     if (!editModal) return
     setSaving(true)
     try {
-      await api.patch(`/propietarios/${editModal.id}`, editForm)
+      await api.patch(`/propietarios/${editModal.id}`,
+        {
+  nombre:   editForm.nombre,
+  telefono: editForm.telefono,
+  correo:   editForm.correo,
+  banco:    editForm.banco?.toLowerCase(),
+  tipoPago: editForm.tipo_pago,
+}
+
+      )
       toast.success('Propietario actualizado')
       setEditModal(null); loadOwners()
     } catch (e: any) {
