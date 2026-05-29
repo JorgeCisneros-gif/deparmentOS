@@ -18,7 +18,7 @@ export class FeesController {
   constructor(private readonly svc: FeesService) {}
 
   @Post('calculate')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({
     summary: 'Calcular cuotas del período para todos los deptos del edificio',
     description: `
@@ -53,7 +53,7 @@ Si ya existen cuotas para el período, las actualiza.
   }
 
   @Get('pending')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Resumen de cuotas pendientes del mes por edificio' })
   @ApiQuery({ name: 'buildingId', required: true })
   @ApiQuery({ name: 'month', required: true, type: Number })
@@ -81,14 +81,14 @@ Si ya existen cuotas para el período, las actualiza.
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Actualizar estado de pago de una cuota' })
   updateStatus(@Param('id') id: string, @Body() dto: UpdateFeeStatusDto) {
     return this.svc.updateStatus(id, dto.status);
   }
 
   @Get('period-vencimiento')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Obtener fecha de vencimiento actual de las cuotas del período' })
   @ApiQuery({ name: 'buildingId', required: true })
   @ApiQuery({ name: 'month',      required: true, type: Number })
@@ -102,7 +102,7 @@ Si ya existen cuotas para el período, las actualiza.
   }
 
   @Patch('period-vencimiento')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Actualizar fecha de vencimiento para todas las cuotas del período' })
   updatePeriodVencimiento(
     @Body() body: { buildingId: string; month: number; year: number; fechaVencimiento: string },

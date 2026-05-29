@@ -26,7 +26,7 @@ export class TemplateController {
   // ── CRUD ──────────────────────────────────────────────────────
 
   @Post()
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({
     summary: 'Crear plantilla de mensaje personalizada',
     description: `
@@ -79,21 +79,21 @@ Si \`esDefault: true\`, esta plantilla se usará automáticamente para el tipo i
   preview(@Param('id') id: string) { return this.svc.preview(id); }
 
   @Patch(':id')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Actualizar plantilla' })
   update(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
     return this.svc.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Desactivar plantilla' })
   deactivate(@Param('id') id: string) { return this.svc.deactivate(id); }
 
   // ── Renderizado ───────────────────────────────────────────────
 
   @Post('render/one')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({
     summary: '📱 Renderizar mensaje para un destinatario',
     description: `
@@ -115,7 +115,7 @@ Para variables personalizadas adicionales usar \`variablesExtra\`:
   }
 
   @Post('render/all')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({
     summary: '📱 Renderizar mensaje para TODOS los deptos del edificio',
     description: `

@@ -16,7 +16,7 @@ import { UserRole } from '../users/user.entity';
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPERVISOR)
+@Roles(UserRole.ADMINISTRADOR)
 @Controller('payments')
 export class PaymentsController {
   constructor(

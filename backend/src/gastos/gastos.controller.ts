@@ -44,7 +44,7 @@ export class GastosController {
   }
 
   @Post()
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Crear nuevo gasto extra' })
   async create(@Body() dto: CreateGastoDto) {
     this.logger.log(`[POST /gastos] body recibido: ${JSON.stringify(dto)}`);
@@ -62,7 +62,7 @@ export class GastosController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Editar gasto extra' })
   async update(@Param('id') id: string, @Body() dto: UpdateGastoDto) {
     this.logger.log(`[PATCH /gastos/${id}] body: ${JSON.stringify(dto)}`);
@@ -78,14 +78,14 @@ export class GastosController {
   }
 
   @Patch(':id/cerrar')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Cerrar un gasto' })
   cerrar(@Param('id') id: string) {
     return this.svc.cerrar(id);
   }
 
   @Patch(':id/anular')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Anular un gasto' })
   anular(@Param('id') id: string) {
     return this.svc.anular(id);
@@ -100,7 +100,7 @@ export class GastosController {
   }
 
   @Post('pagos')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Registrar pago de gasto extra' })
   async registrarPago(@Req() req: any) {
     this.logger.log(`[POST /gastos/pagos] content-type: ${req.headers['content-type']}`);
@@ -150,14 +150,14 @@ export class GastosController {
   }
 
   @Delete('pagos/:id')
-  @Roles(UserRole.SUPERVISOR)
+  @Roles(UserRole.ADMINISTRADOR)
   @ApiOperation({ summary: 'Eliminar un pago de gasto extra' })
   deletePago(@Param('id') id: string) {
     return this.svc.deletePago(id);
   }
 
   @Post('pagos/:id/comprobante')
-@Roles(UserRole.SUPERVISOR)
+@Roles(UserRole.ADMINISTRADOR)
 async uploadComprobante(
   @Param('id') id: string,
   @Body() body: { base64: string; filename: string },
