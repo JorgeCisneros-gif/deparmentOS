@@ -61,8 +61,9 @@ export default function OwnersPage() {
   useEffect(() => { loadBuildings() }, [])
 
   useEffect(() => {
-    loadOwners()
-  }, [filterBld])
+  if (isAdministrador() && buildings.length === 0) return  // esperar buildings
+  loadOwners()
+}, [filterBld, buildings])  // ← agregar buildings como dependencia
 
   useEffect(() => {
     if (!form.idEdificio) { setDepts([]); return }
@@ -84,23 +85,22 @@ export default function OwnersPage() {
   const loadOwners = async () => {
   setLoading(true)
   try {
-    // Si es admin y no hay filtro de edificio, cargar todos los de sus edificios
-    let params: any = {}
     if (filterBld) {
-      params.buildingId = filterBld
+      const { data } = await api.get('/propietarios', { params: { buildingId: filterBld } })
+      setOwners(data || [])
     } else if (isAdministrador() && buildings.length > 0) {
-      // Cargar propietarios de todos los edificios del grupo
       const allOwners: Owner[] = []
       for (const b of buildings) {
         const { data } = await api.get('/propietarios', { params: { buildingId: b.id } })
         allOwners.push(...(data || []))
       }
       setOwners(allOwners)
-      setLoading(false)
-      return
+    } else if (isSupervisor()) {
+      const { data } = await api.get('/propietarios')
+      setOwners(data || [])
+    } else {
+      setOwners([])
     }
-    const { data } = await api.get('/propietarios', { params })
-    setOwners(data || [])
   } catch { toast.error('Error cargando propietarios') }
   finally { setLoading(false) }
 }
