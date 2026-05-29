@@ -8,6 +8,7 @@ import {
   Plus, Pencil, X, Loader2, Save, Shield, User,
   ToggleLeft, ToggleRight, KeyRound, Send, Copy, Check,
   Building2, Home,
+  Layers,
 } from 'lucide-react'
 
 interface UserItem {
@@ -226,12 +227,13 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td style={{ padding:'0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',fontSize:'0.8rem',color:'var(--text-secondary)' }}>
-                      {u.idEdificio
-                        ? <span style={{ display:'flex',alignItems:'center',gap:'0.3rem' }}><Building2 size={12} /> Edificio asignado</span>
-                        : u.idDepartamento
-                          ? <span style={{ display:'flex',alignItems:'center',gap:'0.3rem' }}><Home size={12} /> Depto asignado</span>
-                          : <span style={{ color:'var(--text-muted)' }}>—</span>
-                      }
+                      {u.idGrupo
+    ? <span style={{ display:'flex',alignItems:'center',gap:'0.3rem' }}>
+        <Layers size={12} color="var(--blue)" />
+        <span style={{ color:'var(--blue)',fontWeight:600 }}>Grupo asignado</span>
+      </span>
+    : <span style={{ color:'var(--text-muted)' }}>—</span>
+  }
                     </td>
                     <td style={{ padding:'0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
                       <button onClick={() => toggleActive(u)}

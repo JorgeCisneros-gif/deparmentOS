@@ -11,7 +11,7 @@ import { UserRole } from '../users/user.entity';
 @ApiTags('Notifications')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPERVISOR)
+@Roles(UserRole.ADMINISTRADOR)
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly svc: NotificationsService) {}

@@ -82,15 +82,28 @@ export default function OwnersPage() {
   }
 
   const loadOwners = async () => {
-    setLoading(true)
-    try {
-      const { data } = await api.get('/propietarios', {
-        params: filterBld ? { buildingId: filterBld } : {},
-      })
-      setOwners(data || [])
-    } catch { toast.error('Error cargando propietarios') }
-    finally { setLoading(false) }
-  }
+  setLoading(true)
+  try {
+    // Si es admin y no hay filtro de edificio, cargar todos los de sus edificios
+    let params: any = {}
+    if (filterBld) {
+      params.buildingId = filterBld
+    } else if (isAdministrador() && buildings.length > 0) {
+      // Cargar propietarios de todos los edificios del grupo
+      const allOwners: Owner[] = []
+      for (const b of buildings) {
+        const { data } = await api.get('/propietarios', { params: { buildingId: b.id } })
+        allOwners.push(...(data || []))
+      }
+      setOwners(allOwners)
+      setLoading(false)
+      return
+    }
+    const { data } = await api.get('/propietarios', { params })
+    setOwners(data || [])
+  } catch { toast.error('Error cargando propietarios') }
+  finally { setLoading(false) }
+}
 
   const checkRequisitos = async () => {
     setCheckingReq(true)
