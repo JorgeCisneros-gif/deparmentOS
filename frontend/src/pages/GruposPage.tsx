@@ -125,20 +125,30 @@ export default function GruposPage() {
   }
 
   const handleCreate = async () => {
-    if (!createForm.nombre || !createForm.adminEmail || !createForm.adminPassword) {
-      toast.error('Nombre, email y contraseña del admin son requeridos'); return
-    }
-    setSaving(true)
-    try {
-      const { data } = await api.post('/grupos', createForm)
-      toast.success(`Grupo "${data.grupo.nombre}" creado con su administrador`)
-      setCreateModal(false)
-      setCreateForm({ nombre:'',ruc:'',direccion:'',plan:'demo',subscriptionEnd:'',adminEmail:'',adminPassword:'' })
-      load()
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Error al crear grupo')
-    } finally { setSaving(false) }
+  if (!createForm.nombre || !createForm.adminEmail || !createForm.adminPassword) {
+    toast.error('Nombre, email y contraseña del admin son requeridos'); return
   }
+  setSaving(true)
+  try {
+    const payload: any = {
+      nombre:        createForm.nombre,
+      ruc:           createForm.ruc       || undefined,
+      direccion:     createForm.direccion || undefined,
+      plan:          createForm.plan,
+      adminEmail:    createForm.adminEmail,
+      adminPassword: createForm.adminPassword,
+    }
+    if (createForm.subscriptionEnd) payload.subscriptionEnd = createForm.subscriptionEnd
+
+    const { data } = await api.post('/grupos', payload)
+    toast.success(`Grupo "${data.grupo.nombre}" creado con su administrador`)
+    setCreateModal(false)
+    setCreateForm({ nombre:'',ruc:'',direccion:'',plan:'demo',subscriptionEnd:'',adminEmail:'',adminPassword:'' })
+    load()
+  } catch (e: any) {
+    toast.error(e?.response?.data?.message || 'Error al crear grupo')
+  } finally { setSaving(false) }
+}
 
   const handleUpdate = async () => {
     if (!selectedGrupo) return
