@@ -106,22 +106,23 @@ export default function OwnersPage() {
 }
 
   const checkRequisitos = async () => {
-    setCheckingReq(true)
-    try {
-      // Verificar que el grupo tenga edificios con departamentos
-      const { data } = await api.get('/grupos/mi-grupo')
-      const grupoId = data?.id
-      if (!grupoId) return
+  // Supervisor siempre puede crear
+  if (isSupervisor()) { setHasEdificioConDeptos(true); return }
 
-      // Verificar si hay departamentos en los edificios del grupo
-      let totalDeptos = 0
-      for (const edificio of (data.edificios || [])) {
-        const dRes = await api.get('/departments', { params: { buildingId: edificio.id } })
-        totalDeptos += (dRes.data || []).length
-      }
-      setHasEdificioConDeptos(totalDeptos > 0)
-    } catch {} finally { setCheckingReq(false) }
-  }
+  setCheckingReq(true)
+  try {
+    // Consultar departamentos directamente por edificio
+    let totalDeptos = 0
+    for (const b of buildings) {
+      const { data } = await api.get('/departments', { params: { buildingId: b.id } })
+      totalDeptos += (data || []).length
+    }
+    setHasEdificioConDeptos(totalDeptos > 0)
+  } catch {
+    // Si falla la validación, permitir continuar
+    setHasEdificioConDeptos(true)
+  } finally { setCheckingReq(false) }
+}
 
   const openNew = async () => {
     setForm(EMPTY_FORM)
