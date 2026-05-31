@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import api from '../services/api'
 import { APP_STORAGE_PREFIX } from '../config/brand'
+import { useConfigStore } from './config.store'
 
 const KEY_TOKEN = `${APP_STORAGE_PREFIX}_token`
 const KEY_USER  = `${APP_STORAGE_PREFIX}_user`
@@ -10,7 +11,7 @@ interface AuthUser {
   id:              string
   email:           string
   role:            'supervisor' | 'administrador' | 'gestion' | 'propietario'
-  idGrupo?:        string   // grupo al que pertenece
+  idGrupo?:        string
   idEdificio?:     string
   idDepartamento?: string
   idPropietario?:  string
@@ -24,16 +25,14 @@ interface AuthState {
   login:   (email: string, password: string) => Promise<void>
   logout:  () => void
 
-  // ── Helpers de rol ─────────────────────────────────────────
-  isSupervisor:    () => boolean  // solo supervisor
-  isAdministrador: () => boolean  // solo administrador
-  isGestion:       () => boolean  // solo gestion
-  isPropietario:   () => boolean  // solo propietario
+  isSupervisor:    () => boolean
+  isAdministrador: () => boolean
+  isGestion:       () => boolean
+  isPropietario:   () => boolean
 
-  // ── Helpers de acceso agrupados ────────────────────────────
-  canManage:      () => boolean  // supervisor + administrador
-  canOperate:     () => boolean  // supervisor + administrador + gestion
-  canViewHistory: () => boolean  // todos
+  canManage:      () => boolean
+  canOperate:     () => boolean
+  canViewHistory: () => boolean
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -48,8 +47,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true })
     try {
       const { data } = await api.post('/auth/login', { email, password })
+
+      // Guardar token y usuario
       localStorage.setItem(KEY_TOKEN, data.accessToken)
       localStorage.setItem(KEY_USER,  JSON.stringify(data.user))
+
+      // ← Guardar config del sistema en el store de config
+      if (data.config) {
+        useConfigStore.getState().setConfig(data.config)
+      }
+
       set({ user: data.user, token: data.accessToken, loading: false })
     } catch (err) {
       set({ loading: false })
@@ -60,6 +67,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     localStorage.removeItem(KEY_TOKEN)
     localStorage.removeItem(KEY_USER)
+    // Limpiar config de sesión
+    useConfigStore.getState().clear()
     set({ user: null, token: null })
   },
 

@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { GruposModule } from './grupos/grupos.module';
+import { AppConfigModule } from './config/app-config.module';
 import { BuildingsModule } from './buildings/buildings.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { ReadingsModule } from './readings/readings.module';
@@ -40,7 +41,8 @@ import { MailModule } from './mail/mail.module';
     AuthModule,
     UsersModule,
     AccountsModule,
-    GruposModule,        // ← nuevo
+    GruposModule,
+    AppConfigModule,
     BuildingsModule,
     DepartmentsModule,
     ServicesModule,

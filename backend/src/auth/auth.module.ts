@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { GruposModule } from '../grupos/grupos.module';
+import { AppConfigModule } from '../config/app-config.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { GruposModule } from '../grupos/grupos.module';
     }),
     UsersModule,
     GruposModule,
+    AppConfigModule,
   ],
   controllers: [AuthController],
   providers:   [AuthService, JwtStrategy],

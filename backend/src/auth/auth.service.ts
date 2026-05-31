@@ -3,14 +3,16 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { AppConfigService } from '../config/app-config.service';
 import { LoginDto, RefreshTokenDto } from './auth.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly usersService: UsersService,
-    private readonly jwtService:   JwtService,
+    private readonly usersService:    UsersService,
+    private readonly jwtService:      JwtService,
+    private readonly appConfigService: AppConfigService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -22,11 +24,13 @@ export class AuthService {
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
 
-    // Actualizar last_login
     await this.usersService.updateLastLogin(user.id);
 
     const tokens = await this.generateTokens(user);
     await this.usersService.updateRefreshToken(user.id, tokens.refreshToken);
+
+    // Cargar config del sistema junto con el login
+    const config = await this.appConfigService.getAll();
 
     return {
       accessToken:  tokens.accessToken,
@@ -40,6 +44,7 @@ export class AuthService {
         idDepartamento: user.idDepartamento,
         idPropietario:  user.idPropietario,
       },
+      config, // ← toda la config del sistema en un solo payload
     };
   }
 
