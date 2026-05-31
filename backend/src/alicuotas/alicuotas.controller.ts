@@ -29,7 +29,7 @@ class SaveAlicuotasDto {
 @ApiTags('Alicuotas')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMINISTRADOR)
+@Roles(UserRole.GESTION)
 @Controller('alicuotas')
 export class AlicuotasController {
   constructor(private readonly svc: AlicuotasService) {}

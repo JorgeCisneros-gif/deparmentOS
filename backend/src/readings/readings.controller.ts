@@ -19,7 +19,7 @@ export class ReadingsController {
   constructor(private readonly svc: ReadingsService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Registrar medición manual' })
   create(@Body() dto: CreateReadingDto) {
     return this.svc.create(dto);
@@ -58,7 +58,7 @@ export class ReadingsController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Corregir medición' })
   update(@Param('id') id: string, @Body() dto: UpdateReadingDto) {
     return this.svc.update(id, dto);
@@ -67,7 +67,7 @@ export class ReadingsController {
   // ── OCR ───────────────────────────────────────────────────
 
   @Post('ocr')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: '📸 Subir foto del medidor → OCR automático' })
   @ApiBody({
@@ -136,7 +136,7 @@ export class ReadingsController {
   }
 
   @Post('confirm-ocr')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: '✅ Confirmar lectura OCR y guardar medición' })
   confirmOcr(@Body() body: { meterImageId: string } & ConfirmOcrReadingDto, @Request() req) {
     const { meterImageId, ...dto } = body;
@@ -144,7 +144,7 @@ export class ReadingsController {
   }
 
   @Post('housekeeping')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Eliminar imágenes de medidores vencidas' })
   housekeeping() {
     return this.svc.runHousekeeping();

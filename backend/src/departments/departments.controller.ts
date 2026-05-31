@@ -16,7 +16,7 @@ export class DepartmentsController {
   constructor(private readonly svc: DepartmentsService) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Crear departamento' })
   create(@Body() dto: CreateDepartmentDto) { return this.svc.create(dto); }
 
@@ -30,7 +30,7 @@ export class DepartmentsController {
   findOne(@Param('id') id: string) { return this.svc.findOne(id); }
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Actualizar departamento (propietario, status)' })
   update(@Param('id') id: string, @Body() dto: UpdateDepartmentDto) {
     return this.svc.update(id, dto);

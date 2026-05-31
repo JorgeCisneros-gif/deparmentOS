@@ -28,7 +28,7 @@ class SendTestEmailDto {
 @ApiTags('Mail')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMINISTRADOR)
+@Roles(UserRole.GESTION)
 @Controller('mail')
 export class MailController {
   constructor(private readonly mailSvc: MailService) {}
