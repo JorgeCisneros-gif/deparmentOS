@@ -42,17 +42,26 @@ export class CreateReceiptDto {
   @IsOptional() detalleJson?: object;
 
   @ApiPropertyOptional({ description: 'Total m³/kWh de la factura del proveedor (para por_consumo_ajustado)' })
-@IsOptional() @IsNumber() @Min(0)
-totalUnidadesFactura?: number;
- 
-@ApiPropertyOptional({ description: 'm³/kWh propios (estimado manual o calculado desde mediciones)' })
-@IsOptional() @IsNumber() @Min(0)
-m3Propios?: number;
- 
-@ApiPropertyOptional({ description: 'Factor de ajuste editable. Si se omite, se calcula como totalUnidadesFactura / m3Propios' })
-@IsOptional() @IsNumber() @Min(0)
-factorAjuste?: number;
- 
+  @IsOptional() @IsNumber() @Min(0)
+  totalUnidadesFactura?: number;
+
+  @ApiPropertyOptional({ description: 'm³/kWh propios (estimado manual o calculado desde mediciones)' })
+  @IsOptional() @IsNumber() @Min(0)
+  m3Propios?: number;
+
+  @ApiPropertyOptional({ description: 'Factor de ajuste editable. Si se omite, se calcula como totalUnidadesFactura / m3Propios' })
+  @IsOptional() @IsNumber() @Min(0)
+  factorAjuste?: number;
+
+  // ── Factor estado ─────────────────────────────────────────────
+  @ApiPropertyOptional({
+    description: 'Estado del factor de ajuste',
+    enum: ['pendiente', 'estimado', 'calculado'],
+    example: 'estimado',
+  })
+  @IsOptional()
+  @IsIn(['pendiente', 'estimado', 'calculado'])
+  factorEstado?: string;
 }
 
 export class UpdateReceiptDto extends PartialType(CreateReceiptDto) {
