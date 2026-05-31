@@ -8,8 +8,6 @@ import {
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
 
-// ── Tipos ─────────────────────────────────────────────────────
-
 interface Building  { id: string; nombre: string }
 interface Servicio  {
   id: string; idEdificio: string; nombreServicio: string
@@ -17,29 +15,27 @@ interface Servicio  {
   detalleServicio: Record<string, any>
 }
 
-// ── Config visual ─────────────────────────────────────────────
-
-const TIPO_CFG: Record<string, { Icon: any; color: string; label: string }> = {
-  agua:          { Icon: Droplets,    color: '#4a9eff',       label: 'Agua' },
-  luz:           { Icon: Zap,         color: 'var(--accent)', label: 'Luz' },
-  internet:      { Icon: Wifi,        color: 'var(--green)',  label: 'Internet' },
-  limpieza:      { Icon: Brush,       color: '#a78bfa',       label: 'Limpieza' },
-  mantenimiento: { Icon: Wrench,      color: '#fb923c',       label: 'Mantenimiento' },
-  otro:          { Icon: ReceiptText, color: '#94a3b8',       label: 'Otro' },
+const TIPO_CFG: Record<string, { Icon: any; color: string; label: string; defaultUnidad: string | null }> = {
+  agua:          { Icon: Droplets,    color: '#4a9eff',       label: 'Agua',          defaultUnidad: 'm3'  },
+  luz:           { Icon: Zap,         color: 'var(--accent)', label: 'Luz',           defaultUnidad: 'kwh' },
+  internet:      { Icon: Wifi,        color: 'var(--green)',  label: 'Internet',      defaultUnidad: null  },
+  limpieza:      { Icon: Brush,       color: '#a78bfa',       label: 'Limpieza',      defaultUnidad: null  },
+  mantenimiento: { Icon: Wrench,      color: '#fb923c',       label: 'Mantenimiento', defaultUnidad: null  },
+  otro:          { Icon: ReceiptText, color: '#94a3b8',       label: 'Otro',          defaultUnidad: null  },
 }
 
 const TIPOS = Object.entries(TIPO_CFG).map(([key, cfg]) => ({ key, ...cfg }))
 
 const MODOS = [
   { key: 'division_igualitaria', label: 'División igualitaria',  desc: 'Monto total ÷ nro. departamentos' },
-  { key: 'por_consumo_m3',       label: 'Por consumo m³',
-    desc: 'Según medición individual del medidor (sin ajuste)' },
-  { key: 'por_consumo_ajustado', label: 'Por consumo ajustado',        desc: 'Factor de ajuste para cuadrar exactamente con la factura' },
-  { key: 'porcentaje_alicuota',  label: 'Por alícuota (%)',      desc: 'Monto total × alícuota del departamento' },
+  { key: 'por_consumo_m3',       label: 'Por consumo m³/kWh',   desc: 'Según medición individual del medidor (sin ajuste)' },
+  { key: 'por_consumo_ajustado', label: 'Por consumo ajustado', desc: 'Factor de ajuste para cuadrar exactamente con la factura' },
+  { key: 'porcentaje_alicuota',  label: 'Por alícuota (%)',     desc: 'Monto total × alícuota del departamento' },
 ]
 
-// Campos de detalle por tipo de servicio
-const DETALLE_FIELDS: Record<string, Array<{ key: string; label: string; placeholder: string; type?: string }>> = {
+const MODOS_CON_MEDICION = ['por_consumo_m3', 'por_consumo_ajustado']
+
+const DETALLE_FIELDS: Record<string, Array<{ key: string; label: string; placeholder: string }>> = {
   agua: [
     { key: 'proveedor', label: 'Proveedor', placeholder: 'Sedapal' },
     { key: 'cuenta',    label: 'N° cuenta/contrato', placeholder: 'CLI-123456' },
@@ -72,11 +68,17 @@ const DETALLE_FIELDS: Record<string, Array<{ key: string; label: string; placeho
 }
 
 const EMPTY = {
-  nombreServicio: '', tipo: 'agua', modoCalculo: 'division_igualitaria', unidadMedida: null,
-  activo: true, detalleServicio: {} as Record<string, any>,
+  nombreServicio: '', tipo: 'agua', modoCalculo: 'division_igualitaria',
+  unidadMedida: null, activo: true, detalleServicio: {} as Record<string, any>,
 }
 
-const btn: React.CSSProperties  = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.6rem 1.1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
+// Helper: unidad por defecto según tipo + modo
+function getDefaultUnidad(tipo: string, modoCalculo: string): string | null {
+  if (!MODOS_CON_MEDICION.includes(modoCalculo)) return null
+  return TIPO_CFG[tipo]?.defaultUnidad || 'm3'
+}
+
+const btn:  React.CSSProperties = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.6rem 1.1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
 const btn2: React.CSSProperties = { ...btn, background:'var(--bg-elevated)',color:'var(--text-secondary)',border:'1px solid var(--border)' }
 
 function Field({ label, children, span = 1 }: any) {
@@ -88,8 +90,6 @@ function Field({ label, children, span = 1 }: any) {
   )
 }
 
-// ── Componente principal ──────────────────────────────────────
-
 export default function ServicesPage() {
   const [selBuilding, setSelBuilding] = useState('')
   const [servicios, setServicios]     = useState<Servicio[]>([])
@@ -98,7 +98,7 @@ export default function ServicesPage() {
   const [editing, setEditing]         = useState<any>(EMPTY)
   const [saving, setSaving]           = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<Servicio | null>(null)
-  const [deleting, setDeleting]           = useState(false)
+  const [deleting, setDeleting]       = useState(false)
   const [toggling, setToggling]       = useState<string | null>(null)
   const [expanded, setExpanded]       = useState<string | null>(null)
 
@@ -121,29 +121,43 @@ export default function ServicesPage() {
     setEditing((prev: any) => ({ ...prev, detalleServicio: { ...prev.detalleServicio, [key]: value } }))
   }
 
+  // ── Al cambiar tipo: auto-seleccionar unidad correcta ─────────
+  const handleTipoChange = (newTipo: string) => {
+    const defaultUnidad = getDefaultUnidad(newTipo, editing.modoCalculo)
+    setEditing({ ...editing, tipo: newTipo, unidadMedida: defaultUnidad, detalleServicio: {} })
+  }
+
+  // ── Al cambiar modo: ajustar unidad según tipo ────────────────
+  const handleModoChange = (newModo: string) => {
+    const defaultUnidad = getDefaultUnidad(editing.tipo, newModo)
+    setEditing({ ...editing, modoCalculo: newModo, unidadMedida: defaultUnidad })
+  }
+
   const save = async () => {
     if (!editing.nombreServicio?.trim()) return toast.error('El nombre es obligatorio')
     if (!editing.tipo)                   return toast.error('Selecciona el tipo')
     if (!editing.modoCalculo)            return toast.error('Selecciona el modo de cálculo')
     setSaving(true)
     try {
+      const payload: any = {
+        nombreServicio:  editing.nombreServicio,
+        tipo:            editing.tipo,
+        modoCalculo:     editing.modoCalculo,
+        activo:          editing.activo ?? true,
+        detalleServicio: editing.detalleServicio || {},
+      }
+      // Solo incluir unidadMedida si el modo la requiere
+      if (MODOS_CON_MEDICION.includes(editing.modoCalculo)) {
+        payload.unidadMedida = editing.unidadMedida || getDefaultUnidad(editing.tipo, editing.modoCalculo) || 'm3'
+      } else {
+        payload.unidadMedida = null
+      }
+
       if (editing.id) {
-        await api.patch(`/services/${editing.id}`, {
-          nombreServicio:  editing.nombreServicio,
-          tipo:            editing.tipo,
-          modoCalculo:     editing.modoCalculo,
-          activo:          editing.activo ?? true,
-          detalleServicio: editing.detalleServicio || {},
-        })
+        await api.patch(`/services/${editing.id}`, payload)
         toast.success('Servicio actualizado')
       } else {
-        await api.post('/services', {
-          idEdificio:      selBuilding,
-          nombreServicio:  editing.nombreServicio,
-          tipo:            editing.tipo,
-          modoCalculo:     editing.modoCalculo,
-          detalleServicio: editing.detalleServicio || {},
-        })
+        await api.post('/services', { idEdificio: selBuilding, ...payload })
         toast.success('Servicio creado')
       }
       await load(); close()
@@ -163,10 +177,6 @@ export default function ServicesPage() {
     finally { setToggling(null) }
   }
 
-  const activos   = servicios.filter(s => s.activo).length
-  const inactivos = servicios.filter(s => !s.activo).length
-  const detalleCfg = DETALLE_FIELDS[editing.tipo] || DETALLE_FIELDS['otro']
-
   const deleteServicio = async (s: Servicio) => {
     setDeleting(true)
     try {
@@ -178,10 +188,14 @@ export default function ServicesPage() {
     finally { setDeleting(false) }
   }
 
+  const activos   = servicios.filter(s => s.activo).length
+  const inactivos = servicios.filter(s => !s.activo).length
+  const detalleCfg = DETALLE_FIELDS[editing.tipo] || DETALLE_FIELDS['otro']
+  const needsUnidad = MODOS_CON_MEDICION.includes(editing.modoCalculo)
+
   return (
     <div style={{ padding:'2rem', maxWidth:1000, margin:'0 auto' }}>
 
-      {/* Header */}
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.5rem',flexWrap:'wrap',gap:'1rem' }} className="fade-up">
         <div>
           <h1 style={{ fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:700,letterSpacing:'-0.02em',marginBottom:'0.2rem' }}>Servicios</h1>
@@ -192,7 +206,6 @@ export default function ServicesPage() {
         </button>
       </div>
 
-      {/* Selector edificio */}
       <div style={{ display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1.5rem',flexWrap:'wrap' }} className="fade-up">
         <div style={{ display:'flex',flexDirection:'column',gap:'0.3rem' }}>
           <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em' }}>Edificio</label>
@@ -206,7 +219,6 @@ export default function ServicesPage() {
         )}
       </div>
 
-      {/* Lista */}
       {loading ? (
         <div style={{ display:'flex',justifyContent:'center',padding:'4rem' }}>
           <Loader2 size={24} color="var(--accent)" style={{ animation:'spin 0.8s linear infinite' }} />
@@ -222,7 +234,7 @@ export default function ServicesPage() {
           <table style={{ width:'100%',borderCollapse:'collapse',fontSize:'0.875rem' }}>
             <thead>
               <tr>
-                {['','Servicio','Tipo','Modo de cálculo','Detalle','Estado',''].map((h,i) => (
+                {['','Servicio','Tipo','Modo de cálculo','Unidad','Detalle','Estado',''].map((h,i) => (
                   <th key={i} style={{ textAlign:'left',padding:'0.75rem 1rem',color:'var(--text-muted)',fontSize:'0.72rem',fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase' as const,borderBottom:'1px solid var(--border)',background:'var(--bg-elevated)',whiteSpace:'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -233,11 +245,11 @@ export default function ServicesPage() {
                 const modo = MODOS.find(m => m.key === svc.modoCalculo)
                 const hasDetalle = Object.keys(svc.detalleServicio || {}).filter(k => svc.detalleServicio[k]).length > 0
                 const isExpanded = expanded === svc.id
+                const unidadLabel = svc.unidadMedida === 'kwh' ? 'kWh' : svc.unidadMedida === 'm3' ? 'm³' : svc.unidadMedida || '—'
 
                 return (
                   <>
                     <tr key={svc.id} style={{ opacity:svc.activo?1:0.5,...(i%2!==0?{background:'rgba(255,255,255,0.02)'}:{}) }}>
-                      {/* Expand */}
                       <td style={{ padding:'0.85rem 0.5rem 0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',width:32 }}>
                         {hasDetalle && (
                           <button onClick={() => setExpanded(isExpanded ? null : svc.id)}
@@ -258,17 +270,22 @@ export default function ServicesPage() {
                         <div style={{ fontSize:'0.82rem',fontWeight:500 }}>{modo?.label || svc.modoCalculo}</div>
                         <div style={{ fontSize:'0.72rem',color:'var(--text-muted)' }}>{modo?.desc}</div>
                       </td>
-                      {/* Resumen detalle */}
-                      <td style={{ padding:'0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',maxWidth:200 }}>
-                        {hasDetalle ? (
-                          <div style={{ fontSize:'0.75rem',color:'var(--text-secondary)' }}>
-                            {svc.detalleServicio.proveedor && <div>🏢 {svc.detalleServicio.proveedor}</div>}
-                            {svc.detalleServicio.zonas && <div>📍 {svc.detalleServicio.zonas}</div>}
-                            {svc.detalleServicio.frecuencia && <div>🔄 {svc.detalleServicio.frecuencia}</div>}
-                          </div>
+                      {/* Columna unidad */}
+                      <td style={{ padding:'0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
+                        {svc.unidadMedida ? (
+                          <span style={{ fontSize:'0.8rem',fontWeight:600,color:'var(--text-secondary)',fontFamily:'monospace' }}>{unidadLabel}</span>
                         ) : (
                           <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>
                         )}
+                      </td>
+                      <td style={{ padding:'0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',maxWidth:180 }}>
+                        {hasDetalle ? (
+                          <div style={{ fontSize:'0.75rem',color:'var(--text-secondary)' }}>
+                            {svc.detalleServicio.proveedor  && <div>🏢 {svc.detalleServicio.proveedor}</div>}
+                            {svc.detalleServicio.zonas      && <div>📍 {svc.detalleServicio.zonas}</div>}
+                            {svc.detalleServicio.frecuencia && <div>🔄 {svc.detalleServicio.frecuencia}</div>}
+                          </div>
+                        ) : <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>}
                       </td>
                       <td style={{ padding:'0.85rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
                         <button onClick={() => !toggling && toggleActivo(svc)} disabled={!!toggling}
@@ -287,10 +304,9 @@ export default function ServicesPage() {
                         </button>
                       </td>
                     </tr>
-                    {/* Fila expandida con detalle completo */}
                     {isExpanded && hasDetalle && (
                       <tr key={`${svc.id}-detail`}>
-                        <td colSpan={7} style={{ padding:'0 1rem 0.75rem 3.5rem',borderBottom:'1px solid rgba(255,255,255,0.03)',background:'rgba(255,255,255,0.01)' }}>
+                        <td colSpan={8} style={{ padding:'0 1rem 0.75rem 3.5rem',borderBottom:'1px solid rgba(255,255,255,0.03)',background:'rgba(255,255,255,0.01)' }}>
                           <div style={{ display:'flex',flexWrap:'wrap',gap:'0.75rem' }}>
                             {Object.entries(svc.detalleServicio).filter(([,v]) => v).map(([k, v]) => (
                               <div key={k} style={{ background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'0.35rem 0.65rem' }}>
@@ -310,7 +326,7 @@ export default function ServicesPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal crear/editar */}
       {modal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem',backdropFilter:'blur(4px)' }} onClick={close}>
           <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border-accent)',borderRadius:'var(--radius-lg)',width:'100%',maxWidth:560,maxHeight:'90vh',overflowY:'auto',boxShadow:'var(--shadow-lg)' }} onClick={e => e.stopPropagation()} className="fade-up">
@@ -322,39 +338,51 @@ export default function ServicesPage() {
 
             <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1rem',padding:'1.5rem' }}>
               <Field label="Nombre *" span={2}>
-                <input value={editing.nombreServicio||''} onChange={e=>setEditing({...editing,nombreServicio:e.target.value})} placeholder="Ej: Agua Sedapal, Limpieza edificio..." autoFocus />
+                <input value={editing.nombreServicio||''} onChange={e=>setEditing({...editing,nombreServicio:e.target.value})} placeholder="Ej: Agua Sedapal, Luz Enel..." autoFocus />
               </Field>
+
               <Field label="Tipo *">
-                <select value={editing.tipo||'agua'} onChange={e=>setEditing({...editing,tipo:e.target.value,detalleServicio:{}})}>
+                {/* ← auto-selecciona unidad al cambiar tipo */}
+                <select value={editing.tipo||'agua'} onChange={e => handleTipoChange(e.target.value)}>
                   {TIPOS.map(t=><option key={t.key} value={t.key}>{t.label}</option>)}
                 </select>
               </Field>
+
               <Field label="Modo de cálculo *">
-                <select value={editing.modoCalculo||'division_igualitaria'} onChange={e=>{
-                  const val = e.target.value
-                  setEditing({...editing, modoCalculo:val, unidadMedida: (val==='por_consumo_m3'||val==='por_consumo_ajustado')?(editing.unidadMedida||'m3'):null})
-                }}>
+                {/* ← auto-selecciona unidad al cambiar modo */}
+                <select value={editing.modoCalculo||'division_igualitaria'} onChange={e => handleModoChange(e.target.value)}>
                   {MODOS.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
                 </select>
               </Field>
-              {(editing.modoCalculo === 'por_consumo_m3' || editing.modoCalculo === 'por_consumo_ajustado') && (
-                <Field label="Unidad de medida *">
-                  <select value={editing.unidadMedida||'m3'} onChange={e=>setEditing({...editing,unidadMedida:e.target.value})} style={{ width:'100%' }}>
+
+              {/* Selector de unidad — solo visible si el modo requiere medición */}
+              {needsUnidad && (
+                <Field label="Unidad de medida *" span={2}>
+                  <select value={editing.unidadMedida||'m3'} onChange={e=>setEditing({...editing,unidadMedida:e.target.value})}>
                     <option value="m3">m³ — Metros cúbicos (agua, gas)</option>
-                    <option value="kwh">kWh — Kilovatios hora (luz)</option>
+                    <option value="kwh">kWh — Kilovatios hora (luz eléctrica)</option>
                     <option value="unidad">Unidad — Conteo genérico</option>
                   </select>
+                  {/* Hint de la unidad recomendada */}
+                  {editing.tipo === 'luz' && editing.unidadMedida !== 'kwh' && (
+                    <p style={{ fontSize:'0.72rem',color:'var(--accent)',marginTop:'0.25rem' }}>
+                      ⚡ Se recomienda kWh para servicios de luz eléctrica
+                    </p>
+                  )}
+                  {editing.tipo === 'agua' && editing.unidadMedida !== 'm3' && (
+                    <p style={{ fontSize:'0.72rem',color:'var(--blue)',marginTop:'0.25rem' }}>
+                      💧 Se recomienda m³ para servicios de agua
+                    </p>
+                  )}
                 </Field>
               )}
 
-              {/* Descripción modo */}
               <div style={{ gridColumn:'span 2',background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'0.65rem 0.9rem' }}>
                 <p style={{ fontSize:'0.78rem',color:'var(--text-secondary)' }}>
                   <strong>Modo: </strong>{MODOS.find(m=>m.key===editing.modoCalculo)?.desc||'—'}
                 </p>
               </div>
 
-              {/* Campos de detalle dinámicos según tipo */}
               {detalleCfg.length > 0 && (
                 <div style={{ gridColumn:'span 2',borderTop:'1px solid var(--border)',paddingTop:'1rem' }}>
                   <p style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:'0.75rem' }}>
@@ -374,7 +402,6 @@ export default function ServicesPage() {
                 </div>
               )}
 
-              {/* Estado — solo edición */}
               {editing.id && (
                 <Field label="Estado" span={2}>
                   <div style={{ display:'flex',gap:'0.5rem' }}>
@@ -419,10 +446,7 @@ export default function ServicesPage() {
               <p style={{ fontSize:'0.875rem' }}>Se desactivará <strong style={{ color:'#f87171' }}>{confirmDelete.nombreServicio}</strong>. El historial se conservará.</p>
             </div>
             <div style={{ display:'flex',justifyContent:'flex-end',gap:'0.75rem' }}>
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting}
-                style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--bg-elevated)',color:'var(--text-secondary)',fontSize:'0.875rem',padding:'0.5rem 0.9rem',borderRadius:'var(--radius)',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'var(--font-body)' }}>
-                Cancelar
-              </button>
+              <button onClick={() => setConfirmDelete(null)} disabled={deleting} style={btn2}>Cancelar</button>
               <button onClick={() => deleteServicio(confirmDelete)} disabled={deleting}
                 style={{ display:'flex',alignItems:'center',gap:'0.5rem',background:'#f87171',color:'#fff',fontWeight:700,fontSize:'0.875rem',padding:'0.6rem 1.1rem',borderRadius:'var(--radius)',border:'none',cursor:deleting?'wait':'pointer',fontFamily:'var(--font-body)',opacity:deleting?0.7:1 }}>
                 {deleting ? <Loader2 size={14} style={{ animation:'spin 0.8s linear infinite' }}/> : <Trash2 size={14}/>}
