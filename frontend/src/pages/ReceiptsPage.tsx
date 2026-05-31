@@ -690,6 +690,7 @@ function AjustadoModal({ servicio, recibo, mes, anio, onClose, onSaved }: any) {
         totalUnidadesFactura: parseFloat(String(form.totalUnidadesFactura)),
         m3Propios:            form.m3Propios ? parseFloat(String(form.m3Propios)) : undefined,
         factorAjuste:         form.factorAjuste ? parseFloat(String(form.factorAjuste)) : undefined,
+        factorEstado:         form.factorAjuste ? (form.factorEstado || 'estimado') : undefined,
         proveedor:            form.proveedor || undefined,
         fechaVencimiento:     form.fechaVencimiento || undefined,
       }

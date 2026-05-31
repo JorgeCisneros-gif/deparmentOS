@@ -214,15 +214,16 @@ export class FeesService {
         const factor       = parseFloat((recibo as any).factorAjuste as any) || 1;
         const factorEstado = (recibo as any).factorEstado || 'pendiente';
 
-        if (factorEstado === 'pendiente') {
-          // Factor aún no calculado → usar precio base sin ajuste (estimación)
+        // Si factor está pendiente (no calculado aún), advertir pero usarlo igual
+        // Factor default es 1.0 si no fue guardado nunca
+        if (factorEstado === 'pendiente' && factor === 1) {
           this.logger.warn(
-            `Factor de ajuste pendiente para recibo ${recibo.id} — usando factor 1.0`,
+            `Factor de ajuste pendiente para recibo ${recibo.id} — usando factor 1.0 (sin ajuste)`,
           );
-          return parseFloat((m3 * precioReal).toFixed(2));
         }
 
         // monto = m3 × (montoFactura / totalUnidades) × factorAjuste
+        // Siempre usar el factor guardado, sea cual sea el factorEstado
         return parseFloat((m3 * precioReal * factor).toFixed(2));
       }
  

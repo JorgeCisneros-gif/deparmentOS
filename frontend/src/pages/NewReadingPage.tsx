@@ -160,9 +160,10 @@ export default function NewReadingPage() {
   useEffect(() => {
     if (!lecturaConfirmada || !lecturaAnterior || !selectedRecibo) return
     const recibo = receipts.find((r: any) => r.id === selectedRecibo)
-    if (!recibo?.precioM3) return
+    const precioEfectivo = getPrecioEfectivo(recibo)
+    if (!precioEfectivo) return
     const consumo = parseFloat(lecturaConfirmada) - parseFloat(lecturaAnterior)
-    if (consumo > 0) setMontoCalculado((consumo * parseFloat(recibo.precioM3)).toFixed(2))
+    if (consumo > 0) setMontoCalculado((consumo * precioEfectivo).toFixed(2))
   }, [lecturaConfirmada, lecturaAnterior, selectedRecibo])
 
   const confirmOcr = async () => {
@@ -202,6 +203,19 @@ export default function NewReadingPage() {
     setMontoCalculado(''); setSelectedDepto(''); setShowEditor(false); setImageFueEditada(false)
     setMedicionExistente(null); setModoManual(false); setSelectedServicio(''); setSvcsConMedicion([])
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+
+  // ── Helper: precio efectivo por unidad ───────────────────────
+  // Para modo "por consumo ajustado", precioM3 viene en 0 desde el backend.
+  // Lo calculamos como: montoTotalFactura / totalUnidadesFactura (m3 del recibo)
+  const getPrecioEfectivo = (r: any): number => {
+    const precio = parseFloat(r?.precioM3 || 0)
+    if (precio > 0) return precio
+    const monto  = parseFloat(r?.montoTotalFactura || 0)
+    const m3Fact = parseFloat(r?.m3LecturaActual || r?.m3ConsumoTotal || r?.totalUnidadesFactura || 0)
+    if (monto > 0 && m3Fact > 0) return monto / m3Fact
+    return 0
   }
 
   const recibo      = receipts.find((r: any) => r.id === selectedRecibo)
@@ -352,8 +366,8 @@ export default function NewReadingPage() {
               <select value={selectedRecibo} onChange={e => setSelectedRecibo(e.target.value)}>
                 {receipts.map((r:any) => {
                   const monto      = parseFloat(r.montoTotalFactura||0).toFixed(2)
-                  const consumoFac = parseFloat(r.m3LecturaActual||r.m3ConsumoTotal||0)
-                  const precio     = parseFloat(r.precioM3||0)
+                  const consumoFac = parseFloat(r.m3LecturaActual||r.m3ConsumoTotal||r.totalUnidadesFactura||0)
+                  const precio     = getPrecioEfectivo(r)
                   return (
                     <option key={r.id} value={r.id}>
                       {MESES_CORTO[r.periodoMes]} {r.periodoAnio} — S/. {monto}
@@ -572,7 +586,7 @@ export default function NewReadingPage() {
           <div style={{ background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'1rem 1.25rem',display:'flex',flexDirection:'column',gap:'0.5rem',marginBottom:'1.25rem' }}>
             {[
               [`${unidad} consumidos`, `${consumido} ${unidad}`, 'var(--blue)'],
-              [`Precio/${unidad}`, `S/. ${recibo ? parseFloat(recibo.precioM3||0).toFixed(4) : '—'}`, ''],
+              [`Precio/${unidad}`, `S/. ${recibo ? getPrecioEfectivo(recibo).toFixed(4) : '—'}`, ''],
               ['Monto a cobrar', `S/. ${montoCalculado||'—'}`, 'var(--accent)'],
             ].map(([label, value, color]) => (
               <div key={label} style={{ display:'flex',justifyContent:'space-between',fontSize:'0.9rem',...(label==='Monto a cobrar'?{borderTop:'1px solid var(--border)',paddingTop:'0.6rem',marginTop:'0.2rem'}:{}) }}>
