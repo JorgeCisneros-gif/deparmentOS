@@ -78,13 +78,14 @@ function StatCard({ icon, label, value, unit, color, trend }: any) {
 
 export default function DashboardPage() {
   const { fmt } = useTz()
-  const { user, isSupervisor } = useAuthStore()
-  const supervisor = isSupervisor()
+  const { user, isSupervisor, isAdministrador, isGestion } = useAuthStore()
+  // Dashboard de edificio: supervisor + administrador + gestión
+  const supervisor = isSupervisor() || isAdministrador() || isGestion()
 
   // Para supervisor: loading=false al inicio para que BuildingSelector se monte
   // y pueda llamar a onChange → selectedBuilding → loadSupervisorData.
   // Para propietario: loading=true hasta que loadResidentData termine.
-  const [loading, setLoading]   = useState(!supervisor)
+  const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [selectedBuilding, setSelectedBuilding] = useState('')
   const [mes, setMes]   = useState(new Date().getMonth() + 1)
