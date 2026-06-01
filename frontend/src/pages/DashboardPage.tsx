@@ -137,20 +137,37 @@ export default function DashboardPage() {
   }
 
   // ── Datos para gráfica m³ por depto ──────────────────────
-  const m3Data = (() => {
-    if (!summary?.departamentos) return []
-    const items = summary.departamentos
-      .filter((d: any) => d.medicion?.m3Consumido > 0)
-      .map((d: any) => ({ depto: d.depto, m3: num(d.medicion.m3Consumido) }))
-    const totalM3 = items.reduce((s: number, i: any) => s + i.m3, 0)
-    return items.map((i: any, idx: number) => ({
-      ...i,
-      pct:  totalM3 > 0 ? (i.m3 / totalM3) * 100 : 0,
-      fill: PIE_COLORS[idx % PIE_COLORS.length],
-    }))
+  // Agrupar consumos por servicio (dinámico — un gráfico por servicio con medición)
+  const svcMedicionData = (() => {
+    if (!summary?.departamentos || !summary?.serviciosEdificio) return []
+    const svcs = (summary.serviciosEdificio || []).filter((s: any) =>
+      ['por_consumo_m3','por_consumo_ajustado'].includes(s.modoCalculo) && s.activo
+    )
+    return svcs.map((svc: any) => {
+      const items = summary.departamentos
+        .map((d: any) => {
+          // Buscar medición de este servicio específico
+          const med = d.medicionPorServicio?.[svc.id] || (d.medicion?.idServicio === svc.id ? d.medicion : null)
+          const consumo = med ? num(med.m3Consumido ?? med.consumo ?? 0) : 0
+          return { depto: d.depto, consumo }
+        })
+        .filter((i: any) => i.consumo > 0)
+      const totalConsumo = items.reduce((s: number, i: any) => s + i.consumo, 0)
+      return {
+        svc,
+        items: items.map((i: any, idx: number) => ({
+          ...i,
+          pct:  totalConsumo > 0 ? (i.consumo / totalConsumo) * 100 : 0,
+          fill: PIE_COLORS[idx % PIE_COLORS.length],
+        })),
+        totalConsumo,
+      }
+    }).filter((g: any) => g.items.length > 0)
   })()
 
-  const totalM3Medido = m3Data.reduce((s: number, i: any) => s + i.m3, 0)
+  // Compatibilidad — primer servicio de medición (para fallback)
+  const m3Data = svcMedicionData[0]?.items || []
+  const totalM3Medido = svcMedicionData[0]?.totalConsumo || 0
 
   // ── Datos para gráfica demora de pago ────────────────────
   const delayData = (() => {
@@ -263,63 +280,65 @@ export default function DashboardPage() {
           </div>
 
           {/* Gráficas */}
-          {(m3Data.length > 0 || delayData.length > 0) ? (
+          {(svcMedicionData.length > 0 || delayData.length > 0) ? (
             <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(340px, 1fr))',gap:'1rem',marginBottom:'1.5rem' }}>
 
-              {/* Gráfica 1: % m³ por depto */}
-              {m3Data.length > 0 && (
-                <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'1.25rem' }} className="fade-up">
-                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.5rem' }}>
-                    <div>
-                      <h3 style={{ fontSize:'0.95rem',fontWeight:600,marginBottom:'0.2rem' }}>Consumo de agua por departamento</h3>
-                      <p style={{ fontSize:'0.78rem',color:'var(--text-muted)' }}>% del total medido — {MESES[mes]} {anio}</p>
-                    </div>
-                    <Droplets size={16} color="var(--blue)" />
-                  </div>
-
-                  <div style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'rgba(74,158,255,0.07)',border:'1px solid rgba(74,158,255,0.15)',borderRadius:6,padding:'0.4rem 0.7rem',marginBottom:'0.75rem' }}>
-                    <Droplets size={11} color="var(--blue)" />
-                    <p style={{ fontSize:'0.72rem',color:'var(--blue)' }}>
-                      Total medido por deptos: <strong>{totalM3Medido.toFixed(3)} m³</strong>
-                      <span style={{ color:'var(--text-muted)',fontWeight:400 }}> — puede diferir del recibo Sedapal</span>
-                    </p>
-                  </div>
-
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={m3Data} cx="50%" cy="50%" outerRadius={85} dataKey="pct" labelLine={false} label={renderPieLabel}>
-                        {m3Data.map((entry: any, i: number) => (
-                          <Cell key={i} fill={entry.fill} stroke="var(--bg-surface)" strokeWidth={2} />
-                        ))}
-                      </Pie>
-                      <ReTooltip content={<PieTooltip />} />
-                      <Legend
-                        formatter={(_: any, entry: any) => (
-                          <span style={{ fontSize:'0.72rem',color:'var(--text-secondary)' }}>
-                            D{entry.payload.depto} ({entry.payload.pct.toFixed(1)}%)
-                          </span>
-                        )}
-                        iconSize={8} iconType="circle"
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-
-                  {/* Mini barras */}
-                  <div style={{ borderTop:'1px solid var(--border)',paddingTop:'0.75rem',marginTop:'0.25rem',display:'flex',flexDirection:'column',gap:'0.35rem',maxHeight:150,overflowY:'auto' }}>
-                    {m3Data.map((d: any) => (
-                      <div key={d.depto} style={{ display:'flex',alignItems:'center',gap:'0.5rem',fontSize:'0.78rem' }}>
-                        <div style={{ width:8,height:8,borderRadius:'50%',background:d.fill,flexShrink:0 }} />
-                        <span style={{ color:'var(--text-secondary)',minWidth:55 }}>Depto {d.depto}</span>
-                        <div style={{ flex:1,height:4,background:'var(--bg-elevated)',borderRadius:2,overflow:'hidden' }}>
-                          <div style={{ width:`${d.pct}%`,height:'100%',background:d.fill,borderRadius:2 }} />
-                        </div>
-                        <span style={{ color:'var(--text-primary)',fontWeight:600,minWidth:38,textAlign:'right' }}>{d.pct.toFixed(1)}%</span>
-                        <span style={{ color:'var(--text-muted)',minWidth:60,textAlign:'right' }}>{d.m3.toFixed(2)} m³</span>
+              {/* Gráficas dinámicas por servicio con medición */}
+              {svcMedicionData.map(({ svc, items, totalConsumo }: any) => {
+                const unidad = svc.unidadMedida === 'kwh' ? 'kWh' : 'm³'
+                const svcColor = svc.tipo === 'luz' ? 'var(--accent)' : svc.tipo === 'agua' ? 'var(--blue)' : 'var(--green)'
+                return (
+                  <div key={svc.id} style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',padding:'1.25rem' }} className="fade-up">
+                    <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'0.5rem' }}>
+                      <div>
+                        <h3 style={{ fontSize:'0.95rem',fontWeight:600,marginBottom:'0.2rem' }}>
+                          Consumo de {svc.nombreServicio} por departamento
+                        </h3>
+                        <p style={{ fontSize:'0.78rem',color:'var(--text-muted)' }}>% del total medido — {MESES[mes]} {anio}</p>
                       </div>
-                    ))}
+                    </div>
+
+                    <div style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:`${svcColor}12`,border:`1px solid ${svcColor}25`,borderRadius:6,padding:'0.4rem 0.7rem',marginBottom:'0.75rem' }}>
+                      <p style={{ fontSize:'0.72rem',color:svcColor }}>
+                        Total medido: <strong>{totalConsumo.toFixed(3)} {unidad}</strong>
+                      </p>
+                    </div>
+
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie data={items} cx="50%" cy="50%" outerRadius={80} dataKey="pct" labelLine={false} label={renderPieLabel}>
+                          {items.map((entry: any, i: number) => (
+                            <Cell key={i} fill={entry.fill} stroke="var(--bg-surface)" strokeWidth={2} />
+                          ))}
+                        </Pie>
+                        <ReTooltip content={<PieTooltip />} />
+                        <Legend
+                          formatter={(_: any, entry: any) => (
+                            <span style={{ fontSize:'0.72rem',color:'var(--text-secondary)' }}>
+                              D{entry.payload.depto} ({entry.payload.pct.toFixed(1)}%)
+                            </span>
+                          )}
+                          iconSize={8} iconType="circle"
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+
+                    <div style={{ borderTop:'1px solid var(--border)',paddingTop:'0.75rem',marginTop:'0.25rem',display:'flex',flexDirection:'column',gap:'0.35rem',maxHeight:140,overflowY:'auto' }}>
+                      {items.map((d: any) => (
+                        <div key={d.depto} style={{ display:'flex',alignItems:'center',gap:'0.5rem',fontSize:'0.78rem' }}>
+                          <div style={{ width:8,height:8,borderRadius:'50%',background:d.fill,flexShrink:0 }} />
+                          <span style={{ color:'var(--text-secondary)',minWidth:55 }}>Depto {d.depto}</span>
+                          <div style={{ flex:1,height:4,background:'var(--bg-elevated)',borderRadius:2,overflow:'hidden' }}>
+                            <div style={{ width:`${d.pct}%`,height:'100%',background:d.fill,borderRadius:2 }} />
+                          </div>
+                          <span style={{ color:'var(--text-primary)',fontWeight:600,minWidth:38,textAlign:'right' }}>{d.pct.toFixed(1)}%</span>
+                          <span style={{ color:'var(--text-muted)',minWidth:65,textAlign:'right' }}>{d.consumo.toFixed(2)} {unidad}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })}
 
               {/* Gráfica 2: demora de pago */}
               {delayData.length > 0 && (

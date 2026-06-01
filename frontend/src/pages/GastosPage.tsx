@@ -644,10 +644,15 @@ export default function GastosPage() {
   const { fmt: fmtDate, today } = useTz()
   const [selectedBuilding, setSelectedBuilding] = useState('')
   const [gastos, setGastos]                 = useState<any[]>([])
+  const [buildings, setBuildings]           = useState<any[]>([])
   const [loading, setLoading]               = useState(false)
   const [error, setError]                   = useState('')
   const [filtroEstado, setFiltroEstado]     = useState('activo')
   const [modalNuevo, setModalNuevo]         = useState(false)
+
+  useEffect(() => {
+    api.get('/buildings').then(r => setBuildings(r.data || [])).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (selectedBuilding) loadGastos()
