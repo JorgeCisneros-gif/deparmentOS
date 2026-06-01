@@ -147,9 +147,9 @@ export default function DashboardPage() {
       const items = summary.departamentos
         .map((d: any) => {
           // Buscar medición de este servicio específico
-          const med = d.medicionPorServicio?.[svc.id] || (d.medicion?.idServicio === svc.id ? d.medicion : null)
-          const consumo = med ? num(med.m3Consumido ?? med.consumo ?? 0) : 0
-          return { depto: d.depto, consumo }
+          const med = d.medicionPorServicio?.[svc.id] || null
+          const consumo = med ? (num(med.m3Consumido ?? med.consumo ?? 0)) : 0
+          return { depto: d.depto, consumo: consumo || 0 }
         })
         .filter((i: any) => i.consumo > 0)
       const totalConsumo = items.reduce((s: number, i: any) => s + i.consumo, 0)
@@ -157,10 +157,11 @@ export default function DashboardPage() {
         svc,
         items: items.map((i: any, idx: number) => ({
           ...i,
-          pct:  totalConsumo > 0 ? (i.consumo / totalConsumo) * 100 : 0,
-          fill: PIE_COLORS[idx % PIE_COLORS.length],
+          consumo: i.consumo || 0,
+          pct:     totalConsumo > 0 ? ((i.consumo || 0) / totalConsumo) * 100 : 0,
+          fill:    PIE_COLORS[idx % PIE_COLORS.length],
         })),
-        totalConsumo,
+        totalConsumo: totalConsumo || 0,
       }
     }).filter((g: any) => g.items.length > 0)
   })()
@@ -300,7 +301,7 @@ export default function DashboardPage() {
 
                     <div style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:`${svcColor}12`,border:`1px solid ${svcColor}25`,borderRadius:6,padding:'0.4rem 0.7rem',marginBottom:'0.75rem' }}>
                       <p style={{ fontSize:'0.72rem',color:svcColor }}>
-                        Total medido: <strong>{totalConsumo.toFixed(3)} {unidad}</strong>
+                        Total medido: <strong>{(totalConsumo||0).toFixed(3)} {unidad}</strong>
                       </p>
                     </div>
 
@@ -332,7 +333,7 @@ export default function DashboardPage() {
                             <div style={{ width:`${d.pct}%`,height:'100%',background:d.fill,borderRadius:2 }} />
                           </div>
                           <span style={{ color:'var(--text-primary)',fontWeight:600,minWidth:38,textAlign:'right' }}>{d.pct.toFixed(1)}%</span>
-                          <span style={{ color:'var(--text-muted)',minWidth:65,textAlign:'right' }}>{d.consumo.toFixed(2)} {unidad}</span>
+                          <span style={{ color:'var(--text-muted)',minWidth:65,textAlign:'right' }}>{(d.consumo||0).toFixed(2)} {unidad}</span>
                         </div>
                       ))}
                     </div>
