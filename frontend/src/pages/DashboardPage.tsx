@@ -48,12 +48,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const PieTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null
-  const d = payload[0].payload
+  const d = payload[0]?.payload
+  if (!d) return null
+  // compatibilidad: campo puede ser consumo (nuevo) o m3 (viejo)
+  const valor = d.consumo ?? d.m3 ?? 0
+  const pct   = d.pct ?? 0
   return (
     <div style={{ background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:8,padding:'0.6rem 0.9rem',fontSize:'0.82rem' }}>
       <p style={{ fontWeight:700,marginBottom:2 }}>Depto {d.depto}</p>
-      <p style={{ color:'var(--blue)' }}>{d.m3.toFixed(3)} m³</p>
-      <p style={{ color:'var(--text-secondary)' }}>{d.pct.toFixed(1)}% del total medido</p>
+      <p style={{ color:'var(--blue)' }}>{(typeof valor === 'number' ? valor : 0).toFixed(3)}</p>
+      <p style={{ color:'var(--text-secondary)' }}>{(typeof pct === 'number' ? pct : 0).toFixed(1)}% del total</p>
     </div>
   )
 }
@@ -216,6 +220,7 @@ export default function DashboardPage() {
   const lastFeeStatus = lastFee?.statusPago ?? lastFee?.status_pago ?? '—'
 
   const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, depto }: any) => {
+    if (pct == null || pct < 5) return null  // no renderizar si undefined o muy pequeño
     if (pct < 5) return null
     const RADIAN = Math.PI / 180
     const radius = innerRadius + (outerRadius - innerRadius) * 0.55
@@ -316,7 +321,7 @@ export default function DashboardPage() {
                         <Legend
                           formatter={(_: any, entry: any) => (
                             <span style={{ fontSize:'0.72rem',color:'var(--text-secondary)' }}>
-                              D{entry.payload.depto} ({entry.payload.pct.toFixed(1)}%)
+                              D{entry.payload.depto} ({(entry.payload.pct ?? 0).toFixed(1)}%)
                             </span>
                           )}
                           iconSize={8} iconType="circle"
@@ -332,7 +337,7 @@ export default function DashboardPage() {
                           <div style={{ flex:1,height:4,background:'var(--bg-elevated)',borderRadius:2,overflow:'hidden' }}>
                             <div style={{ width:`${d.pct}%`,height:'100%',background:d.fill,borderRadius:2 }} />
                           </div>
-                          <span style={{ color:'var(--text-primary)',fontWeight:600,minWidth:38,textAlign:'right' }}>{d.pct.toFixed(1)}%</span>
+                          <span style={{ color:'var(--text-primary)',fontWeight:600,minWidth:38,textAlign:'right' }}>{(d.pct ?? 0).toFixed(1)}%</span>
                           <span style={{ color:'var(--text-muted)',minWidth:65,textAlign:'right' }}>{(d.consumo||0).toFixed(2)} {unidad}</span>
                         </div>
                       ))}
