@@ -33,7 +33,7 @@ export class ReceiptsController {
   ) {}
 
   @Post()
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   create(@Body() dto: CreateReceiptDto) { return this.svc.create(dto); }
 
 
@@ -57,11 +57,11 @@ async recalcularFactor(
 
 
   @Patch(':id')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   update(@Param('id') id: string, @Body() dto: UpdateReceiptDto) { return this.svc.update(id, dto); }
 
   @Get('validate-period')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiQuery({ name: 'buildingId', required: true })
   @ApiQuery({ name: 'month', required: true, type: Number })
   @ApiQuery({ name: 'year', required: true, type: Number })
@@ -78,7 +78,7 @@ async recalcularFactor(
   // No depende de servicios.activo para el control por edificio
 
   @Get('period')
-  @Roles(UserRole.ADMINISTRADOR)
+  @Roles(UserRole.GESTION)
   @ApiQuery({ name: 'buildingId', required: true })
   @ApiQuery({ name: 'month', required: true, type: Number })
   @ApiQuery({ name: 'year', required: true, type: Number })
