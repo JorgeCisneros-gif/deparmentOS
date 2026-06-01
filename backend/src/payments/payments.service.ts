@@ -85,18 +85,17 @@ export class PaymentsService {
       const pagos = await this.repo.find({ where: { idCuota: fee.id } });
       const totalPagado = pagos.reduce((s, p) => s + parseFloat(p.montoCancelado as any), 0);
 
-      // Imagen del medidor
+      // Mediciones del período por departamento — todas (no solo agua)
       const medicionData = await this.feeRepo.query(
-        `SELECT md.id, md.id_meter_image, md.m3_consumido, mi.filename, mi.ocr_raw_value, mi.ocr_confidence
+        `SELECT md.id, md.id_meter_image, md.m3_consumido, mi.filename, mi.ocr_raw_value, mi.ocr_confidence,
+                rs.id_servicio, s.tipo AS servicio_tipo
          FROM mediciones_departamento md
          INNER JOIN recibos_servicio rs ON rs.id = md.id_recibo
          INNER JOIN servicios s ON s.id = rs.id_servicio
          LEFT JOIN meter_images mi ON mi.id = md.id_meter_image
          WHERE md.id_departamento = $1
            AND rs.periodo_mes = $2
-           AND rs.periodo_anio = $3
-           AND s.tipo = 'agua'
-         LIMIT 1`,
+           AND rs.periodo_anio = $3`,
         [fee.idDepartamento, fee.periodoMes, fee.periodoAnio],
       );
 
@@ -140,11 +139,23 @@ export class PaymentsService {
           estadoPago:     p.estadoPago,      // ← necesario para detectar pendiente_aprobacion
           aprobadoPor:    p.aprobadoPor,
         })),
-        medicion: medicionData[0] ? {
-          idMeterImage: medicionData[0].id_meter_image,
-          ocrValor:     medicionData[0].ocr_raw_value,
-          confianza:    medicionData[0].ocr_confidence,
-          m3Consumido:  parseFloat(medicionData[0].m3_consumido) || 0,
+        // Mapa por servicio para gráficos dinámicos en dashboard
+        medicionPorServicio: medicionData.reduce((acc: any, md: any) => {
+          acc[md.id_servicio] = {
+            idMeterImage: md.id_meter_image,
+            ocrValor:     md.ocr_raw_value,
+            confianza:    md.ocr_confidence,
+            m3Consumido:  parseFloat(md.m3_consumido) || 0,
+            tipo:         md.servicio_tipo,
+          };
+          return acc;
+        }, {}),
+        // Compatibilidad hacia atrás — primera medición de agua
+        medicion: medicionData.find((md: any) => md.servicio_tipo === 'agua') ? {
+          idMeterImage: medicionData.find((md: any) => md.servicio_tipo === 'agua').id_meter_image,
+          ocrValor:     medicionData.find((md: any) => md.servicio_tipo === 'agua').ocr_raw_value,
+          confianza:    medicionData.find((md: any) => md.servicio_tipo === 'agua').ocr_confidence,
+          m3Consumido:  parseFloat(medicionData.find((md: any) => md.servicio_tipo === 'agua').m3_consumido) || 0,
         } : null,
         fechaVencimiento: fee.fechaVencimiento,
       };
@@ -166,6 +177,7 @@ export class PaymentsService {
       },
       serviciosEdificio: todosLosServicios.map(s => ({
         id: s.id, tipo: s.tipo, nombre: s.nombreServicio, activo: s.activo,
+        modoCalculo: s.modoCalculo, unidadMedida: s.unidadMedida,
       })),
       departamentos: result,
     };
