@@ -11,7 +11,7 @@ import { UserRole } from '../users/user.entity';
 @ApiTags('Services')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMINISTRADOR)   // supervisor + administrador
+@Roles(UserRole.GESTION)   // supervisor + administrador
 @Controller('services')
 export class ServicesController {
   constructor(private readonly svc: ServicesService) {}
