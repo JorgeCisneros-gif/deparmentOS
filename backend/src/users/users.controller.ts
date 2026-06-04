@@ -96,6 +96,15 @@ export class UsersController {
     return this.svc.deactivate(id);
   }
 
+  @Patch(':id/activate')
+  @ApiBearerAuth('access-token')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Reactivar usuario' })
+  activate(@Param('id') id: string) {
+    return this.svc.activate(id);
+  }
+
   @Patch(':id/reset-password')
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, RolesGuard)

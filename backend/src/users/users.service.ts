@@ -124,6 +124,12 @@ export class UsersService {
     await this.repo.save(user);
   }
 
+  async activate(id: string): Promise<void> {
+    const user = await this.findOne(id);
+    user.isActive = true;
+    await this.repo.save(user);
+  }
+
   async updateLastLogin(id: string): Promise<void> {
     await this.repo.update(id, { lastLogin: new Date() });
   }

@@ -3,7 +3,6 @@
 // Importar desde aquí en vez de definir en cada página
 
 // ── Meses ────────────────────────────────────────────────────
-// Índice 0 = vacío para que periodoMes=1 → MESES[1] = 'Enero'
 export const MESES = [
   '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Setiembre', 'Octubre', 'Noviembre', 'Diciembre',
@@ -13,6 +12,27 @@ export const MESES_CORTO = [
   '', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
   'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic',
 ]
+
+// ── Bancos — fallback si config.store no cargó aún ──────────
+export const BANCOS_DEFAULT = [
+  'bcp', 'bbva', 'interbank', 'scotiabank', 'yape', 'plin', 'efectivo', 'otro',
+]
+
+export const BANCO_LABEL: Record<string, string> = {
+  bcp: 'BCP', bbva: 'BBVA', interbank: 'Interbank',
+  scotiabank: 'Scotiabank', yape: 'Yape', plin: 'Plin',
+  efectivo: 'Efectivo', otro: 'Otro',
+}
+
+// ── Tipos de pago — fallback si config.store no cargó aún ───
+export const TIPOS_PAGO_DEFAULT = [
+  'transferencia', 'yape', 'plin', 'efectivo', 'deposito', 'otro',
+]
+
+export const TIPO_PAGO_LABEL: Record<string, string> = {
+  transferencia: 'Transferencia', yape: 'Yape', plin: 'Plin',
+  efectivo: 'Efectivo', deposito: 'Depósito', otro: 'Otro',
+}
 
 // ── Servicios — config visual ────────────────────────────────
 export const TIPO_SERVICIO_CFG: Record<string, {
@@ -28,17 +48,13 @@ export const TIPO_SERVICIO_CFG: Record<string, {
 
 // ── Unidades de medida ────────────────────────────────────────
 export const UNIDAD_LABEL: Record<string, string> = {
-  m3:     'm³',
-  kwh:    'kWh',
-  unidad: 'unid.',
+  m3: 'm³', kwh: 'kWh', unidad: 'unid.',
 }
 
-// Devuelve el label de la unidad del servicio
 export function getUnidadLabel(unidadMedida?: string | null): string {
   return UNIDAD_LABEL[unidadMedida || 'm3'] || 'm³'
 }
 
-// Devuelve el label del recibo según el tipo de servicio
 export function getReciboLabel(tipo?: string): string {
   const cfg = TIPO_SERVICIO_CFG[tipo || 'agua']
   return cfg ? `Recibo de ${cfg.label.toLowerCase()}` : 'Recibo'
@@ -53,5 +69,4 @@ export const MODO_CALCULO_LABEL: Record<string, string> = {
   fijo:                 'Monto fijo',
 }
 
-// Modos que requieren medición individual (lectura de medidor)
 export const MODOS_CON_MEDICION = ['por_consumo_m3', 'por_consumo_ajustado']

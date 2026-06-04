@@ -9,6 +9,7 @@ import {
   RefreshCw, Lock, WifiOff, ZoomIn, ShieldCheck, XCircle,
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
+import { useConfigStore } from '../store/config.store'
 
 // ── Tipos ─────────────────────────────────────────────────────
 
@@ -423,6 +424,7 @@ function MensajeModal({ depto, msgData, loading, onClose, onConfirm }: any) {
 // ── Modal Pago ────────────────────────────────────────────────
 
 function PagoModal({ depto, onClose, onSaved }: any) {
+  const { getBancos, getTiposPago, getBancoLabel, getTipoPagoLabel } = useConfigStore()
   const [monto, setMonto]         = useState(depto.saldo.toFixed(2))
   const [tipoPago, setTipoPago]   = useState('transferencia')
   const [banco, setBanco]         = useState('')
@@ -482,19 +484,14 @@ function PagoModal({ depto, onClose, onSaved }: any) {
             <div>
               <label style={s.fieldLabel}>Tipo de pago *</label>
               <select value={tipoPago} onChange={e => setTipoPago(e.target.value)} style={{ width: '100%' }}>
-                <option value="transferencia">Transferencia</option>
-                <option value="yape">Yape</option>
-                <option value="plin">Plin</option>
-                <option value="efectivo">Efectivo</option>
-                <option value="otro">Otro</option>
+                {getTiposPago().map(t => <option key={t} value={t}>{getTipoPagoLabel(t)}</option>)}
               </select>
             </div>
             <div>
               <label style={s.fieldLabel}>Banco</label>
               <select value={banco} onChange={e => setBanco(e.target.value)} style={{ width: '100%' }}>
                 <option value="">— Sin especificar —</option>
-                <option value="bcp">BCP</option><option value="bbva">BBVA</option>
-                <option value="interbank">Interbank</option><option value="scotiabank">Scotiabank</option>
+                {getBancos().map(b => <option key={b} value={b}>{getBancoLabel(b)}</option>)}
               </select>
             </div>
             <div>

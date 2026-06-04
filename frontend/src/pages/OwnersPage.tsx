@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/auth.store'
+import { useConfigStore } from '../store/config.store'
+import { BANCOS_DEFAULT, TIPOS_PAGO_DEFAULT, BANCO_LABEL, TIPO_PAGO_LABEL } from '../constants'
 import {
   Plus, Pencil, X, Loader2, Save, Phone, Mail,
   Building2, CreditCard, Users, AlertTriangle,
@@ -18,8 +20,8 @@ interface Owner {
 interface Building  { id: string; nombre: string }
 interface Department { id: string; nrDepartamento: string; piso: number }
 
-const BANCO_OPTS = ['BCP','BBVA','Interbank','Scotiabank','Yape','Plin','Efectivo','Otro']
-const PAGO_OPTS  = ['transferencia','yape','plin','efectivo','deposito']
+// Bancos y tipos de pago se cargan desde config.store (BD)
+// con fallback a constantes locales
 
 const btn:  React.CSSProperties = { display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.6rem 1.1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }
 const btn2: React.CSSProperties = { ...btn, background:'var(--bg-elevated)',color:'var(--text-secondary)',border:'1px solid var(--border)' }
@@ -44,6 +46,9 @@ const EMPTY_FORM = {
 
 export default function OwnersPage() {
   const { isSupervisor, isAdministrador, user } = useAuthStore()
+  const { getBancos, getTiposPago, getBancoLabel, getTipoPagoLabel } = useConfigStore()
+  const BANCO_OPTS  = getBancos().map(b => ({ value: b, label: getBancoLabel(b) }))
+  const PAGO_OPTS   = getTiposPago()
 
   const [owners, setOwners]       = useState<Owner[]>([])
   const [buildings, setBuildings] = useState<Building[]>([])
@@ -61,9 +66,8 @@ export default function OwnersPage() {
   useEffect(() => { loadBuildings() }, [])
 
   useEffect(() => {
-  if (isAdministrador() && buildings.length === 0) return  // esperar buildings
-  loadOwners()
-}, [filterBld, buildings])  // ← agregar buildings como dependencia
+    loadOwners()
+  }, [filterBld])
 
   useEffect(() => {
     if (!form.idEdificio) { setDepts([]); return }
@@ -83,46 +87,33 @@ export default function OwnersPage() {
   }
 
   const loadOwners = async () => {
-  setLoading(true)
-  try {
-    if (filterBld) {
-      const { data } = await api.get('/propietarios', { params: { buildingId: filterBld } })
+    setLoading(true)
+    try {
+      const { data } = await api.get('/propietarios', {
+        params: filterBld ? { buildingId: filterBld } : {},
+      })
       setOwners(data || [])
-    } else if (isAdministrador() && buildings.length > 0) {
-      const allOwners: Owner[] = []
-      for (const b of buildings) {
-        const { data } = await api.get('/propietarios', { params: { buildingId: b.id } })
-        allOwners.push(...(data || []))
-      }
-      setOwners(allOwners)
-    } else if (isSupervisor()) {
-      const { data } = await api.get('/propietarios')
-      setOwners(data || [])
-    } else {
-      setOwners([])
-    }
-  } catch { toast.error('Error cargando propietarios') }
-  finally { setLoading(false) }
-}
+    } catch { toast.error('Error cargando propietarios') }
+    finally { setLoading(false) }
+  }
 
   const checkRequisitos = async () => {
-  // Supervisor siempre puede crear
-  if (isSupervisor()) { setHasEdificioConDeptos(true); return }
+    setCheckingReq(true)
+    try {
+      // Verificar que el grupo tenga edificios con departamentos
+      const { data } = await api.get('/grupos/mi-grupo')
+      const grupoId = data?.id
+      if (!grupoId) return
 
-  setCheckingReq(true)
-  try {
-    // Consultar departamentos directamente por edificio
-    let totalDeptos = 0
-    for (const b of buildings) {
-      const { data } = await api.get('/departments', { params: { buildingId: b.id } })
-      totalDeptos += (data || []).length
-    }
-    setHasEdificioConDeptos(totalDeptos > 0)
-  } catch {
-    // Si falla la validación, permitir continuar
-    setHasEdificioConDeptos(true)
-  } finally { setCheckingReq(false) }
-}
+      // Verificar si hay departamentos en los edificios del grupo
+      let totalDeptos = 0
+      for (const edificio of (data.edificios || [])) {
+        const dRes = await api.get('/departments', { params: { buildingId: edificio.id } })
+        totalDeptos += (dRes.data || []).length
+      }
+      setHasEdificioConDeptos(totalDeptos > 0)
+    } catch {} finally { setCheckingReq(false) }
+  }
 
   const openNew = async () => {
     setForm(EMPTY_FORM)
@@ -141,13 +132,13 @@ export default function OwnersPage() {
     try {
       // 1. Crear el propietario
       const { data: newOwner } = await api.post('/propietarios', {
-  nombre:         form.nombre,
-  telefono:       form.telefono,
-  correo:         form.correo,
-  banco:          form.banco.toLowerCase(),        // ← lowercase
-  tipoPago:       form.tipo_pago,                  // ← camelCase
-  idDepartamento: form.idDepartamento,
-})
+        nombre:           form.nombre,
+        telefono:         form.telefono,
+        correo:           form.correo,
+        banco:            form.banco,
+        tipo_pago:        form.tipo_pago,
+        idDepartamento:   form.idDepartamento,
+      })
 
       // 2. Crear el usuario de tipo propietario automáticamente
       await api.post('/users', {
@@ -171,16 +162,7 @@ export default function OwnersPage() {
     if (!editModal) return
     setSaving(true)
     try {
-      await api.patch(`/propietarios/${editModal.id}`,
-        {
-  nombre:   editForm.nombre,
-  telefono: editForm.telefono,
-  correo:   editForm.correo,
-  banco:    editForm.banco?.toLowerCase(),
-  tipoPago: editForm.tipo_pago,
-}
-
-      )
+      await api.patch(`/propietarios/${editModal.id}`, editForm)
       toast.success('Propietario actualizado')
       setEditModal(null); loadOwners()
     } catch (e: any) {
@@ -325,12 +307,12 @@ export default function OwnersPage() {
                   </Field>
                   <Field label="Banco">
                     <select style={inp} value={form.banco} onChange={e => setForm(p => ({ ...p, banco: e.target.value }))}>
-                      {BANCO_OPTS.map(b => <option key={b} value={b}>{b}</option>)}
+                      {BANCO_OPTS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                     </select>
                   </Field>
                   <Field label="Tipo de pago">
                     <select style={inp} value={form.tipo_pago} onChange={e => setForm(p => ({ ...p, tipo_pago: e.target.value }))}>
-                      {PAGO_OPTS.map(p => <option key={p} value={p}>{p}</option>)}
+                      {PAGO_OPTS.map(p => <option key={p} value={p}>{getTipoPagoLabel(p)}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -408,12 +390,12 @@ export default function OwnersPage() {
                 </Field>
                 <Field label="Banco">
                   <select style={inp} value={editForm.banco || ''} onChange={e => setEditForm(p => ({ ...p, banco: e.target.value }))}>
-                    {BANCO_OPTS.map(b => <option key={b} value={b}>{b}</option>)}
+                    {BANCO_OPTS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                   </select>
                 </Field>
                 <Field label="Tipo de pago">
                   <select style={inp} value={editForm.tipo_pago || ''} onChange={e => setEditForm(p => ({ ...p, tipo_pago: e.target.value }))}>
-                    {PAGO_OPTS.map(p => <option key={p} value={p}>{p}</option>)}
+                    {PAGO_OPTS.map(p => <option key={p} value={p}>{getTipoPagoLabel(p)}</option>)}
                   </select>
                 </Field>
               </div>

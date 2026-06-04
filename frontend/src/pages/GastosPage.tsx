@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
+import { useConfigStore } from '../store/config.store'
 import { useTz } from '../store/timezone.store'
 import toast from 'react-hot-toast'
 import {
@@ -13,8 +14,7 @@ import BuildingSelector from '../components/common/BuildingSelector'
 function num(v: any, fb = 0) { const n = parseFloat(v); return isNaN(n) ? fb : n }
 function fmt(n: any) { return `S/. ${num(n).toFixed(2)}` }
 
-const TIPOS_PAGO  = ['efectivo','transferencia','yape','plin','otro']
-const BANCOS      = ['bcp','bbva','interbank','scotiabank','otro']
+// bancos y tipos de pago vienen del config.store
 
 type Estado = 'activo' | 'cerrado' | 'anulado'
 const ESTADO_META: Record<Estado, { label: string; color: string; icon: JSX.Element }> = {
@@ -360,7 +360,7 @@ function ModalPago({ gasto, deptos, onClose, onSaved }: any) {
           <Field label="Tipo de pago">
             <select style={inputStyle} value={form.tipoPago}
               onChange={e => setForm(f => ({...f, tipoPago: e.target.value}))}>
-              {TIPOS_PAGO.map(t => <option key={t} value={t}>{t}</option>)}
+              {getTiposPago().map(t => <option key={t} value={t}>{getTipoPagoLabel(t)}</option>)}
             </select>
           </Field>
           {form.tipoPago === 'transferencia' && (
@@ -368,7 +368,7 @@ function ModalPago({ gasto, deptos, onClose, onSaved }: any) {
               <select style={inputStyle} value={form.banco}
                 onChange={e => setForm(f => ({...f, banco: e.target.value}))}>
                 <option value="">Sin especificar</option>
-                {BANCOS.map(b => <option key={b} value={b}>{b.toUpperCase()}</option>)}
+                {getBancos().map(b => <option key={b} value={b}>{getBancoLabel(b)}</option>)}
               </select>
             </Field>
           )}
@@ -641,6 +641,7 @@ function GastoCard({ gasto, onReload }: { gasto: any; onReload: () => void }) {
 
 // ── Página principal ──────────────────────────────────────────
 export default function GastosPage() {
+  const { getBancos, getTiposPago, getBancoLabel, getTipoPagoLabel } = useConfigStore()
   const { fmt: fmtDate, today } = useTz()
   const [selectedBuilding, setSelectedBuilding] = useState('')
   const [gastos, setGastos]                 = useState<any[]>([])
