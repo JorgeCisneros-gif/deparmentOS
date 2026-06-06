@@ -22,6 +22,8 @@ import { GastosModule } from './gastos/gastos.module';
 import { AlicuotasModule } from './alicuotas/alicuotas.module';
 import { PaisesModule } from './paises/paises.module';
 import { MailModule } from './mail/mail.module';
+import { NotificacionConfigModule } from './notificacion-config/notificacion-config.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 @Module({
   imports: [
@@ -57,6 +59,8 @@ import { MailModule } from './mail/mail.module';
     MailModule,
     AlicuotasModule,
     PaisesModule,
+    NotificacionConfigModule,
+    SchedulerModule,
   ],
 })
 export class AppModule {}
