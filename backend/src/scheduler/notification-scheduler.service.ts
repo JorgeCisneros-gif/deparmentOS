@@ -1,19 +1,18 @@
 // src/scheduler/notification-scheduler.service.ts
 // Scheduler de notificaciones — lee configuraciones de notificacion_config
 // y ejecuta los envíos push correspondientes cada hora en punto.
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { NotificacionConfig, TipoNotificacion, DestinatariosGestion } from '../notificacion-config/notificacion-config.entity';
 import { PushService } from '../notifications/push.service';
 import { Fee } from '../fees/fee.entity';
-import { Gasto } from '../gastos/gasto.entity';
+import { GastoExtra } from '../gastos/gasto-extra.entity';
 import { User, UserRole } from '../users/user.entity';
 import { Receipt } from '../receipts/receipt.entity';
 
 @Injectable()
-export class NotificationSchedulerService {
+export class NotificationSchedulerService implements OnModuleInit {
   private readonly logger = new Logger(NotificationSchedulerService.name);
 
   constructor(
@@ -21,8 +20,8 @@ export class NotificationSchedulerService {
     private readonly configRepo: Repository<NotificacionConfig>,
     @InjectRepository(Fee)
     private readonly feeRepo: Repository<Fee>,
-    @InjectRepository(Gasto)
-    private readonly gastoRepo: Repository<Gasto>,
+    @InjectRepository(GastoExtra)
+    private readonly gastoRepo: Repository<GastoExtra>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(Receipt)
@@ -30,8 +29,13 @@ export class NotificationSchedulerService {
     private readonly pushService: PushService,
   ) {}
 
-  // ── Ejecuta cada hora en punto ────────────────────────────────
-  @Cron('0 * * * *')
+  // ── Inicia el intervalo al arrancar el módulo ────────────────
+  onModuleInit() {
+    // Verificar cada 60 segundos si corresponde ejecutar
+    setInterval(() => this.runScheduledNotifications(), 60_000);
+    this.logger.log('✅ Notification scheduler iniciado');
+  }
+
   async runScheduledNotifications() {
     const now    = new Date();
     const hora   = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
@@ -115,7 +119,7 @@ export class NotificationSchedulerService {
       await this.pushService.sendToUser(usuario.id, {
         title: '💰 Recordatorio de pago pendiente',
         body:  `Tienes un saldo pendiente de S/. ${saldo.toFixed(2)} del período ${this.getMesLabel(cuota.f_periodo_mes)} ${cuota.f_periodo_anio}. Por favor regulariza tu pago.`,
-        data:  { tipo: 'vencimiento_pago', url: '/mis-pagos' },
+        url:   '/mis-pagos',
       });
 
       this.logger.log(`  → Push vencimiento_pago enviado a usuario ${usuario.id}`);
@@ -162,8 +166,8 @@ export class NotificationSchedulerService {
 
         await this.pushService.sendToUser(usuario.id, {
           title: '🏢 Nuevo gasto general en tu edificio',
-          body:  `Se ha registrado un gasto: "${gasto.concepto}" por S/. ${parseFloat(gasto.monto as any).toFixed(2)}. Revisa tu estado de cuenta.`,
-          data:  { tipo: 'gastos_generales', url: '/mis-pagos' },
+          body:  `Se ha registrado un gasto: "${gasto.descripcion}" por S/. ${parseFloat(gasto.montoGasto as any).toFixed(2)}. Revisa tu estado de cuenta.`,
+          url:   '/mis-pagos',
         });
 
         this.logger.log(`  → Push gastos_generales enviado a usuario ${usuario.id}`);
@@ -183,7 +187,7 @@ export class NotificationSchedulerService {
       await this.pushService.sendToUser(usuario.id, {
         title: '📊 Recordatorio: Registro de mediciones',
         body:  'Hoy es el día de registrar las lecturas de medidores. Ingresa a Nueva Medición para comenzar.',
-        data:  { tipo: 'recoleccion_medicion', url: '/readings/new' },
+        url:   '/readings/new',
       });
       this.logger.log(`  → Push recoleccion_medicion enviado a usuario ${usuario.id}`);
     }
@@ -220,7 +224,7 @@ export class NotificationSchedulerService {
         await this.pushService.sendToUser(usuario.id, {
           title: `⚠️ Vence hoy: ${svc?.nombreServicio || 'Servicio'}`,
           body:  `El servicio "${svc?.nombreServicio}" del edificio "${edificio?.nombre}" vence hoy. Revisa el estado del recibo.`,
-          data:  { tipo: 'vencimiento_servicio', url: '/receipts' },
+          url:   '/receipts',
         });
       }
       this.logger.log(`  → Push vencimiento_servicio para recibo ${recibo.id}`);
