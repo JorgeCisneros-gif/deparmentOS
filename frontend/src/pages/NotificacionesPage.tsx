@@ -7,6 +7,7 @@ import {
   MessageSquare, Settings, ChevronLeft, ChevronRight,
   Save, RotateCcw, Send, Copy, Check, Loader2, Pencil,
   X, CheckCircle2, AlertCircle, Info, Plus, Trash2, Calculator,
+  Bell, ToggleLeft, ToggleRight, Clock, Users, Calendar,
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
 import { useBuildings } from '../hooks/useBuildings'
@@ -24,7 +25,7 @@ interface FeeMessage {
 }
 
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
-type Tab = 'mensajes' | 'plantilla' | 'variables'
+type Tab = 'mensajes' | 'plantilla' | 'variables' | 'programacion'
 
 // ── Componente principal ──────────────────────────────────────
 
@@ -47,15 +48,40 @@ export default function NotificacionesPage() {
   const [editModal, setEditModal]   = useState<FeeMessage | null>(null)
   const [editData, setEditData]     = useState<any>({})
 
+  // ── Estado para programación de notificaciones ───────────────
+  const [notifConfigs, setNotifConfigs] = useState<any[]>([])
+  const [loadingConfigs, setLoadingConfigs] = useState(false)
+  const [savingConfig, setSavingConfig] = useState<string | null>(null)
+
   useEffect(() => {
     if (!selBuilding) return
     loadTemplate()
     loadAllVars()
     loadCustomVars()
     if (tab === 'mensajes') loadMessages()
+    loadNotifConfigs()
   }, [selBuilding])
 
   useEffect(() => { if (selBuilding && tab === 'mensajes') loadMessages() }, [mes, anio])
+
+  const loadNotifConfigs = async () => {
+    setLoadingConfigs(true)
+    try {
+      const { data } = await api.get('/notificacion-config/mi-grupo')
+      setNotifConfigs(data || [])
+    } catch {} finally { setLoadingConfigs(false) }
+  }
+
+  const saveNotifConfig = async (config: any) => {
+    setSavingConfig(config.tipo)
+    try {
+      await api.put('/notificacion-config/mi-grupo', config)
+      toast.success('Configuración guardada')
+      loadNotifConfigs()
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Error guardando')
+    } finally { setSavingConfig(null) }
+  }
 
   const loadMessages = useCallback(async () => {
     setLoading(true)
@@ -200,7 +226,7 @@ export default function NotificacionesPage() {
 
       {/* Tabs */}
       <div style={{ display:'flex',gap:'0.25rem',marginBottom:'1.5rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)',padding:'0.25rem',width:'fit-content' }}>
-        {([['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator]] as any[]).map(([key,label,Icon]) => (
+        {([['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell]] as any[]).map(([key,label,Icon]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{ display:'flex',alignItems:'center',gap:'0.4rem',padding:'0.45rem 1rem',borderRadius:'calc(var(--radius) - 2px)',border:'none',background:tab===key?'var(--bg-surface)':'transparent',color:tab===key?'var(--accent)':'var(--text-secondary)',fontWeight:tab===key?600:400,fontSize:'0.875rem',cursor:'pointer',fontFamily:'var(--font-body)',boxShadow:tab===key?'0 1px 3px rgba(0,0,0,0.2)':undefined }}>
             <Icon size={15} /> {label}
@@ -519,6 +545,150 @@ function MensajeModal({ msg, onClose, onReload }: any) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Tab Programación ─────────────────────────────────────────
+
+const TIPO_CFG: Record<string, { titulo: string; desc: string; color: string; destinatario: string; Icon: any }> = {
+  vencimiento_pago:     { titulo: 'Vencimiento de pago',       desc: 'Notifica a propietarios con cuotas pendientes después del envío del mensaje',    color: '#f87171',   destinatario: 'Propietarios', Icon: null },
+  gastos_generales:     { titulo: 'Gastos generales',          desc: 'Notifica a propietarios afectados cuando hay gastos generales registrados',       color: '#fb923c',   destinatario: 'Propietarios', Icon: null },
+  recoleccion_medicion: { titulo: 'Recolección de mediciones', desc: 'Recordatorio mensual para registrar las lecturas de medidores',                    color: '#4a9eff',   destinatario: 'Gestión / Admin', Icon: null },
+  vencimiento_servicio: { titulo: 'Vencimiento de servicio',   desc: 'Notifica cuando vence la fecha de pago de un servicio (recibo)',                   color: '#a78bfa',   destinatario: 'Gestión / Admin', Icon: null },
+}
+
+function ProgramacionTab({ configs, loadingConfigs, savingConfig, onSave }: any) {
+  const [forms, setForms] = useState<Record<string, any>>({})
+
+  useEffect(() => {
+    if (configs.length === 0) return
+    const init: Record<string, any> = {}
+    configs.forEach((c: any) => { init[c.tipo] = { ...c } })
+    setForms(init)
+  }, [configs])
+
+  const update = (tipo: string, field: string, value: any) => {
+    setForms(prev => ({ ...prev, [tipo]: { ...prev[tipo], [field]: value } }))
+  }
+
+  const tiposOrden = ['vencimiento_pago', 'gastos_generales', 'recoleccion_medicion', 'vencimiento_servicio']
+  const inp: React.CSSProperties = { background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.45rem 0.7rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
+
+  if (loadingConfigs) return (
+    <div style={{ display:'flex',justifyContent:'center',padding:'3rem' }}>
+      <Loader2 size={24} color="var(--accent)" style={{ animation:'spin 0.8s linear infinite' }} />
+    </div>
+  )
+
+  return (
+    <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
+      <div style={{ background:'rgba(74,158,255,0.07)',border:'1px solid rgba(74,158,255,0.2)',borderRadius:'var(--radius)',padding:'0.75rem 1rem',display:'flex',alignItems:'center',gap:'0.5rem' }}>
+        <Bell size={14} color="var(--blue)" />
+        <p style={{ fontSize:'0.82rem',color:'var(--blue)' }}>
+          Las notificaciones se envían vía <strong>push web</strong>. El destinatario debe tener la aplicación abierta o habilitadas las notificaciones en su dispositivo.
+        </p>
+      </div>
+
+      {tiposOrden.map(tipo => {
+        const cfg  = TIPO_CFG[tipo]
+        const form = forms[tipo]
+        if (!form) return null
+        const isSaving = savingConfig === tipo
+        const esPropietario = ['vencimiento_pago', 'gastos_generales'].includes(tipo)
+        const tieneOffset   = ['vencimiento_pago', 'gastos_generales'].includes(tipo)
+        const tieneDiaMes   = tipo === 'recoleccion_medicion'
+        const tieneDestinatarios = ['recoleccion_medicion', 'vencimiento_servicio'].includes(tipo)
+
+        return (
+          <div key={tipo} style={{ background:'var(--bg-surface)',border:`1px solid ${form.activo ? cfg.color + '40' : 'var(--border)'}`,borderRadius:'var(--radius-lg)',padding:'1.25rem',transition:'border-color 0.2s' }}>
+            {/* Header de la tarjeta */}
+            <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1rem' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'0.25rem' }}>
+                  <span style={{ fontSize:'0.72rem',fontWeight:700,color:cfg.color,background:`${cfg.color}15`,border:`1px solid ${cfg.color}30`,borderRadius:20,padding:'0.15rem 0.6rem',textTransform:'uppercase',letterSpacing:'0.05em' }}>
+                    {cfg.destinatario}
+                  </span>
+                  <h3 style={{ fontWeight:600,fontSize:'0.95rem' }}>{cfg.titulo}</h3>
+                </div>
+                <p style={{ fontSize:'0.8rem',color:'var(--text-muted)',lineHeight:1.5 }}>{cfg.desc}</p>
+              </div>
+              {/* Toggle activo */}
+              <button onClick={() => update(tipo, 'activo', !form.activo)}
+                style={{ background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:'0.35rem',padding:'0 0 0 1rem',flexShrink:0,color:form.activo?'var(--green)':'var(--text-muted)',fontFamily:'var(--font-body)',fontSize:'0.82rem',fontWeight:600 }}>
+                {form.activo
+                  ? <ToggleRight size={24} color="var(--green)" />
+                  : <ToggleLeft  size={24} color="var(--text-muted)" />}
+                {form.activo ? 'Activo' : 'Inactivo'}
+              </button>
+            </div>
+
+            {/* Configuración (solo si activo) */}
+            {form.activo && (
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'0.75rem',marginBottom:'1rem',padding:'1rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)' }}>
+                {/* Hora de envío */}
+                <div>
+                  <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                    <Clock size={11} /> Hora de envío
+                  </label>
+                  <input type="time" value={form.horaEnvio || '09:00'} onChange={e => update(tipo, 'horaEnvio', e.target.value)} style={inp} />
+                </div>
+
+                {/* Días de offset */}
+                {tieneOffset && (
+                  <div>
+                    <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                      <Clock size={11} /> Días de espera
+                    </label>
+                    <input type="number" min={0} max={60} value={form.diasOffset ?? 0}
+                      onChange={e => update(tipo, 'diasOffset', parseInt(e.target.value) || 0)} style={{ ...inp, width:'80px' }} />
+                    <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>
+                      {tipo === 'vencimiento_pago'
+                        ? 'días desde el envío del mensaje'
+                        : 'días desde creación del gasto'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Día del mes */}
+                {tieneDiaMes && (
+                  <div>
+                    <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                      <Calendar size={11} /> Día del mes
+                    </label>
+                    <input type="number" min={1} max={28} value={form.diaMes ?? 1}
+                      onChange={e => update(tipo, 'diaMes', parseInt(e.target.value) || 1)} style={{ ...inp, width:'80px' }} />
+                    <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>día 1-28 del mes</p>
+                  </div>
+                )}
+
+                {/* Destinatarios gestión */}
+                {tieneDestinatarios && (
+                  <div>
+                    <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                      <Users size={11} /> Destinatarios
+                    </label>
+                    <select value={form.destinatariosGestion || 'ambos'} onChange={e => update(tipo, 'destinatariosGestion', e.target.value)} style={inp}>
+                      <option value="ambos">Gestión + Administrador</option>
+                      <option value="gestion">Solo Gestión</option>
+                      <option value="administrador">Solo Administrador</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Botón guardar */}
+            <div style={{ display:'flex',justifyContent:'flex-end' }}>
+              <button onClick={() => onSave(form)} disabled={!!isSaving}
+                style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:form.activo?'var(--accent)':'var(--bg-elevated)',color:form.activo?'#0f1117':'var(--text-secondary)',fontWeight:600,fontSize:'0.8rem',padding:'0.5rem 1rem',borderRadius:'var(--radius)',border:`1px solid ${form.activo?'var(--accent)':'var(--border)'}`,cursor:'pointer',fontFamily:'var(--font-body)' }}>
+                {isSaving ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
+                Guardar
+              </button>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
