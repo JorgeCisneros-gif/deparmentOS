@@ -559,14 +559,25 @@ const TIPO_CFG: Record<string, { titulo: string; desc: string; color: string; de
 }
 
 function ProgramacionTab({ configs, loadingConfigs, savingConfig, onSave }: any) {
-  const [forms, setForms] = useState<Record<string, any>>({})
-
-  useEffect(() => {
-    if (configs.length === 0) return
+  // Inicializar forms directamente desde configs (evita race condition)
+  const [forms, setForms] = useState<Record<string, any>>(() => {
+    if (!configs || configs.length === 0) return {}
     const init: Record<string, any> = {}
     configs.forEach((c: any) => { init[c.tipo] = { ...c } })
-    setForms(init)
-  }, [configs])
+    return init
+  })
+
+  useEffect(() => {
+    if (!configs || configs.length === 0) return
+    setForms(prev => {
+      const next: Record<string, any> = { ...prev }
+      configs.forEach((c: any) => {
+        // Solo inicializar si no existe aún (evitar sobrescribir ediciones del usuario)
+        if (!next[c.tipo]) next[c.tipo] = { ...c }
+      })
+      return next
+    })
+  }, [configs]) // ← disparar cuando cambia configs
 
   const update = (tipo: string, field: string, value: any) => {
     setForms(prev => ({ ...prev, [tipo]: { ...prev[tipo], [field]: value } }))
