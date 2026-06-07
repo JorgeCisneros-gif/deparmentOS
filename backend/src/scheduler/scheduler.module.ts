@@ -11,14 +11,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      NotificacionConfig,
-      Fee,
-      GastoExtra,
-      User,
-      Receipt,
-    ]),
-    NotificationsModule, // para PushService
+    TypeOrmModule.forFeature([NotificacionConfig, Fee, GastoExtra, User, Receipt]),
+    NotificationsModule,
   ],
   providers: [NotificationSchedulerService],
   exports:   [NotificationSchedulerService],

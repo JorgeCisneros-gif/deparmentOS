@@ -7,8 +7,9 @@ import {
   MessageSquare, Settings, ChevronLeft, ChevronRight,
   Save, RotateCcw, Send, Copy, Check, Loader2, Pencil,
   X, CheckCircle2, AlertCircle, Info, Plus, Trash2, Calculator,
-  Bell, ToggleLeft, ToggleRight, Clock, Users, Calendar,
+  Bell, ToggleLeft, ToggleRight, Clock, Calendar, Users, Building2,
 } from 'lucide-react'
+import { useAuthStore } from '../store/auth.store'
 import BuildingSelector from '../components/common/BuildingSelector'
 import { useBuildings } from '../hooks/useBuildings'
 
@@ -25,7 +26,7 @@ interface FeeMessage {
 }
 
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
-type Tab = 'mensajes' | 'plantilla' | 'variables' | 'programacion'
+type Tab = 'mensajes' | 'plantilla' | 'variables' | 'programacion' | 'tipos'
 
 // ── Componente principal ──────────────────────────────────────
 
@@ -48,12 +49,47 @@ export default function NotificacionesPage() {
   const [editModal, setEditModal]   = useState<FeeMessage | null>(null)
   const [editData, setEditData]     = useState<any>({})
 
-  // ── Estado para programación de notificaciones ───────────────
-  const [notifConfigs, setNotifConfigs] = useState<any[]>([])
-  const [loadingConfigs, setLoadingConfigs] = useState(false)
-  const [savingConfig, setSavingConfig] = useState<string | null>(null)
-  const [grupos, setGrupos] = useState<any[]>([])
+  // ── Estado programación ──────────────────────────────────────
+  const { isSupervisor } = useAuthStore()
+  const [grupos, setGrupos]                 = useState<any[]>([])
   const [selectedGrupoNotif, setSelectedGrupoNotif] = useState('')
+  const [selectedEdifNotif, setSelectedEdifNotif]   = useState('')
+  const [edificiosGrupo, setEdificiosGrupo] = useState<any[]>([])
+  const [notifConfigs, setNotifConfigs]     = useState<any[]>([])
+  const [notifTipos, setNotifTipos]         = useState<any[]>([])
+  const [loadingConfigs, setLoadingConfigs] = useState(false)
+  const [savingConfig, setSavingConfig]     = useState<string | null>(null)
+
+  // Cargar grupos para supervisor
+  useEffect(() => {
+    if (!isSupervisor()) return
+    api.get('/grupos').then(r => {
+      setGrupos((r.data || []).filter((g: any) => g.nombre !== 'SuperGrupo'))
+    }).catch(() => {})
+  }, [])
+
+  // Al seleccionar grupo → cargar edificios
+  useEffect(() => {
+    if (!selectedGrupoNotif) { setEdificiosGrupo([]); setSelectedEdifNotif(''); return }
+    api.get('/buildings').then(r => {
+      setEdificiosGrupo((r.data || []).filter((b: any) => b.idGrupo === selectedGrupoNotif))
+    }).catch(() => {})
+  }, [selectedGrupoNotif])
+
+  // Al seleccionar edificio (para programación) → cargar configs
+  useEffect(() => {
+    const id = isSupervisor() ? selectedEdifNotif : selBuilding
+    if (!id) return
+    loadNotifConfigs(id)
+  }, [selectedEdifNotif, selBuilding])
+
+  // Cargar tipos (para tab tipos)
+  useEffect(() => {
+    if (tab !== 'tipos') return
+    api.get('/notificacion-tipo?soloActivos=false')
+      .then(r => setNotifTipos(r.data || []))
+      .catch(() => {})
+  }, [tab])
 
   useEffect(() => {
     if (!selBuilding) return
@@ -61,47 +97,9 @@ export default function NotificacionesPage() {
     loadAllVars()
     loadCustomVars()
     if (tab === 'mensajes') loadMessages()
-    loadNotifConfigs()
   }, [selBuilding])
 
   useEffect(() => { if (selBuilding && tab === 'mensajes') loadMessages() }, [mes, anio])
-
-  const loadNotifConfigs = async (idGrupoOverride?: string) => {
-    setLoadingConfigs(true)
-    try {
-      const url = idGrupoOverride
-        ? `/notificacion-config/grupo/${idGrupoOverride}`
-        : '/notificacion-config/mi-grupo'
-      const { data } = await api.get(url)
-      setNotifConfigs(data || [])
-    } catch {} finally { setLoadingConfigs(false) }
-  }
-
-  // Cargar grupos para supervisor
-  useEffect(() => {
-    api.get('/grupos').then(r => {
-      const g = (r.data || []).filter((g: any) => g.nombre !== 'SuperGrupo')
-      setGrupos(g)
-    }).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (selectedGrupoNotif) loadNotifConfigs(selectedGrupoNotif)
-  }, [selectedGrupoNotif])
-
-  const saveNotifConfig = async (config: any) => {
-    setSavingConfig(config.tipo)
-    try {
-      const url = selectedGrupoNotif
-        ? `/notificacion-config/grupo/${selectedGrupoNotif}`
-        : '/notificacion-config/mi-grupo'
-      await api.put(url, config)
-      toast.success('Configuración guardada')
-      loadNotifConfigs(selectedGrupoNotif || undefined)
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message || 'Error guardando')
-    } finally { setSavingConfig(null) }
-  }
 
   const loadMessages = useCallback(async () => {
     setLoading(true)
@@ -196,6 +194,27 @@ export default function NotificacionesPage() {
     } catch (e: any) { toast.error(e?.response?.data?.message || 'Error guardando') }
   }
 
+  const loadNotifConfigs = async (idEdificio: string) => {
+    setLoadingConfigs(true)
+    try {
+      const { data } = await api.get(`/notificacion-config/edificio/${idEdificio}`)
+      setNotifConfigs(data || [])
+    } catch {} finally { setLoadingConfigs(false) }
+  }
+
+  const saveNotifConfig = async (config: any) => {
+    const idEdificio = isSupervisor() ? selectedEdifNotif : selBuilding
+    if (!idEdificio) return toast.error('Selecciona un edificio')
+    setSavingConfig(config.idTipo)
+    try {
+      await api.put(`/notificacion-config/edificio/${idEdificio}`, config)
+      toast.success('Configuración guardada')
+      loadNotifConfigs(idEdificio)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Error guardando')
+    } finally { setSavingConfig(null) }
+  }
+
   const navMes = (dir: number) => {
     let m = mes + dir, a = anio
     if (m > 12) { m = 1; a++ }; if (m < 1) { m = 12; a-- }
@@ -246,7 +265,10 @@ export default function NotificacionesPage() {
 
       {/* Tabs */}
       <div style={{ display:'flex',gap:'0.25rem',marginBottom:'1.5rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)',padding:'0.25rem',width:'fit-content' }}>
-        {([['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell]] as any[]).map(([key,label,Icon]) => (
+        {(isSupervisor()
+          ? [['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell],['tipos','Tipos de Notif.',Settings]]
+          : [['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell]]
+        as any[]).map(([key,label,Icon]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{ display:'flex',alignItems:'center',gap:'0.4rem',padding:'0.45rem 1rem',borderRadius:'calc(var(--radius) - 2px)',border:'none',background:tab===key?'var(--bg-surface)':'transparent',color:tab===key?'var(--accent)':'var(--text-secondary)',fontWeight:tab===key?600:400,fontSize:'0.875rem',cursor:'pointer',fontFamily:'var(--font-body)',boxShadow:tab===key?'0 1px 3px rgba(0,0,0,0.2)':undefined }}>
             <Icon size={15} /> {label}
@@ -415,35 +437,30 @@ export default function NotificacionesPage() {
         </div>
       )}
 
-      {/* Tab Programación */}
+      {/* ── TAB PROGRAMACIÓN ── */}
       {tab === 'programacion' && (
-        <>
-          {grupos.length > 0 && (
-            <div style={{ marginBottom:'1rem' }}>
-              <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.05em',display:'block',marginBottom:'0.35rem' }}>
-                Grupo
-              </label>
-              <select value={selectedGrupoNotif}
-                onChange={e => setSelectedGrupoNotif(e.target.value)}
-                style={{ background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',minWidth:240 }}>
-                <option value="">— Seleccionar grupo —</option>
-                {grupos.map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-              </select>
-            </div>
-          )}
-          {(selectedGrupoNotif || grupos.length === 0) ? (
-            <ProgramacionTab
-              configs={notifConfigs}
-              loadingConfigs={loadingConfigs}
-              savingConfig={savingConfig}
-              onSave={saveNotifConfig}
-            />
-          ) : grupos.length > 0 ? (
-            <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-muted)',fontSize:'0.875rem' }}>
-              Selecciona un grupo para ver su configuración de notificaciones
-            </div>
-          ) : null}
-        </>
+        <ProgramacionTab
+          isSupervisor={isSupervisor()}
+          grupos={grupos}
+          selectedGrupoNotif={selectedGrupoNotif}
+          onGrupoChange={setSelectedGrupoNotif}
+          edificiosGrupo={edificiosGrupo}
+          selectedEdifNotif={selectedEdifNotif}
+          onEdifChange={setSelectedEdifNotif}
+          selBuilding={selBuilding}
+          configs={notifConfigs}
+          loadingConfigs={loadingConfigs}
+          savingConfig={savingConfig}
+          onSave={saveNotifConfig}
+        />
+      )}
+
+      {/* ── TAB TIPOS (solo supervisor) ── */}
+      {tab === 'tipos' && isSupervisor() && (
+        <TiposNotifTab
+          tipos={notifTipos}
+          onReload={() => api.get('/notificacion-tipo?soloActivos=false').then(r => setNotifTipos(r.data || []))}
+        />
       )}
 
       {/* Modales */}
@@ -600,162 +617,312 @@ function MensajeModal({ msg, onClose, onReload }: any) {
   )
 }
 
-// ── Tab Programación ─────────────────────────────────────────
+// ── Estilos ───────────────────────────────────────────────────
 
-const TIPO_CFG: Record<string, { titulo: string; desc: string; color: string; destinatario: string; Icon: any }> = {
-  vencimiento_pago:     { titulo: 'Vencimiento de pago',       desc: 'Notifica a propietarios con cuotas pendientes después del envío del mensaje',    color: '#f87171',   destinatario: 'Propietarios', Icon: null },
-  gastos_generales:     { titulo: 'Gastos generales',          desc: 'Notifica a propietarios afectados cuando hay gastos generales registrados',       color: '#fb923c',   destinatario: 'Propietarios', Icon: null },
-  recoleccion_medicion: { titulo: 'Recolección de mediciones', desc: 'Recordatorio mensual para registrar las lecturas de medidores',                    color: '#4a9eff',   destinatario: 'Gestión / Admin', Icon: null },
-  vencimiento_servicio: { titulo: 'Vencimiento de servicio',   desc: 'Notifica cuando vence la fecha de pago de un servicio (recibo)',                   color: '#a78bfa',   destinatario: 'Gestión / Admin', Icon: null },
-}
-
-function ProgramacionTab({ configs, loadingConfigs, savingConfig, onSave }: any) {
-  // Inicializar forms directamente desde configs (evita race condition)
-  const [forms, setForms] = useState<Record<string, any>>(() => {
-    if (!configs || configs.length === 0) return {}
-    const init: Record<string, any> = {}
-    configs.forEach((c: any) => { init[c.tipo] = { ...c } })
-    return init
-  })
+// ── Componente ProgramacionTab ────────────────────────────────
+function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChange, edificiosGrupo, selectedEdifNotif, onEdifChange, selBuilding, configs, loadingConfigs, savingConfig, onSave }: any) {
+  const [forms, setForms] = useState<Record<string, any>>({})
+  const inp: React.CSSProperties = { background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.45rem 0.7rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
 
   useEffect(() => {
     if (!configs || configs.length === 0) return
-    setForms(prev => {
-      const next: Record<string, any> = { ...prev }
-      configs.forEach((c: any) => {
-        // Solo inicializar si no existe aún (evitar sobrescribir ediciones del usuario)
-        if (!next[c.tipo]) next[c.tipo] = { ...c }
-      })
-      return next
+    const next: Record<string, any> = {}
+    configs.forEach((c: any) => {
+      const parsed = parseCronSimple(c.cronExpresion || '0 9 * * *')
+      next[c.idTipo] = { ...c, ...parsed }
     })
-  }, [configs]) // ← disparar cuando cambia configs
+    setForms(next)
+  }, [configs])
 
-  const update = (tipo: string, field: string, value: any) => {
-    setForms(prev => ({ ...prev, [tipo]: { ...prev[tipo], [field]: value } }))
+  const parseCronSimple = (cron: string) => {
+    const parts = cron.split(' ')
+    const min = parts[0]; const hour = parts[1]; const day = parts[2]
+    const hora = `${hour.padStart(2,'0')}:${min.padStart(2,'0')}`
+    return { hora, frecuencia: day === '*' ? 'diario' : 'mensual', diaMes: day !== '*' ? parseInt(day) : 1 }
   }
 
-  const tiposOrden = ['vencimiento_pago', 'gastos_generales', 'recoleccion_medicion', 'vencimiento_servicio']
-  const inp: React.CSSProperties = { background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.45rem 0.7rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
+  const buildCronSimple = (hora: string, frecuencia: string, diaMes: number) => {
+    const [h, m] = hora.split(':')
+    return frecuencia === 'mensual' ? `${m} ${h} ${diaMes} * *` : `${m} ${h} * * *`
+  }
 
-  if (loadingConfigs) return (
-    <div style={{ display:'flex',justifyContent:'center',padding:'3rem' }}>
-      <Loader2 size={24} color="var(--accent)" style={{ animation:'spin 0.8s linear infinite' }} />
-    </div>
-  )
+  const update = (idTipo: string, field: string, value: any) => {
+    setForms(prev => ({ ...prev, [idTipo]: { ...prev[idTipo], [field]: value } }))
+  }
+
+  const handleSave = (idTipo: string) => {
+    const form = forms[idTipo]
+    if (!form) return
+    const cronExpresion = buildCronSimple(form.hora || '09:00', form.frecuencia || 'diario', form.diaMes || 1)
+    onSave({ idTipo, activo: form.activo ?? false, cronExpresion, diasOffset: form.diasOffset ?? 0 })
+  }
+
+  const idEdificio = isSupervisor ? selectedEdifNotif : selBuilding
+  const sinEdificio = !idEdificio
 
   return (
     <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
-      <div style={{ background:'rgba(74,158,255,0.07)',border:'1px solid rgba(74,158,255,0.2)',borderRadius:'var(--radius)',padding:'0.75rem 1rem',display:'flex',alignItems:'center',gap:'0.5rem' }}>
-        <Bell size={14} color="var(--blue)" />
-        <p style={{ fontSize:'0.82rem',color:'var(--blue)' }}>
-          Las notificaciones se envían vía <strong>push web</strong>. El destinatario debe tener la aplicación abierta o habilitadas las notificaciones en su dispositivo.
-        </p>
+      {/* Selector grupo + edificio para supervisor */}
+      {isSupervisor && (
+        <div style={{ display:'flex',gap:'1rem',flexWrap:'wrap',padding:'1rem',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)' }}>
+          <div>
+            <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.05em',display:'block',marginBottom:'0.35rem' }}>Grupo</label>
+            <select value={selectedGrupoNotif} onChange={e => onGrupoChange(e.target.value)}
+              style={{ ...inp, minWidth:200 }}>
+              <option value="">— Seleccionar grupo —</option>
+              {grupos.map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+            </select>
+          </div>
+          {edificiosGrupo.length > 0 && (
+            <div>
+              <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.05em',display:'block',marginBottom:'0.35rem' }}>Edificio</label>
+              <select value={selectedEdifNotif} onChange={e => onEdifChange(e.target.value)}
+                style={{ ...inp, minWidth:200 }}>
+                <option value="">— Seleccionar edificio —</option>
+                {edificiosGrupo.map((b: any) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sinEdificio ? (
+        <div style={{ textAlign:'center' as const,padding:'3rem',color:'var(--text-muted)',fontSize:'0.875rem' }}>
+          <Bell size={32} style={{ opacity:0.3,marginBottom:'0.75rem' }} />
+          <p>{isSupervisor ? 'Selecciona un grupo y edificio' : 'Cargando configuración...'}</p>
+        </div>
+      ) : loadingConfigs ? (
+        <div style={{ display:'flex',justifyContent:'center',padding:'3rem' }}>
+          <Loader2 size={24} color="var(--accent)" style={{ animation:'spin 0.8s linear infinite' }} />
+        </div>
+      ) : (
+        <>
+          <div style={{ background:'rgba(74,158,255,0.07)',border:'1px solid rgba(74,158,255,0.2)',borderRadius:'var(--radius)',padding:'0.75rem 1rem',display:'flex',alignItems:'center',gap:'0.5rem' }}>
+            <Bell size={14} color="var(--blue)" />
+            <p style={{ fontSize:'0.82rem',color:'var(--blue)' }}>
+              Las notificaciones se envían vía <strong>push web</strong>. El dispositivo debe tener habilitadas las notificaciones.
+            </p>
+          </div>
+          {configs.map((config: any) => {
+            const tipo = config.tipo
+            const form = forms[config.idTipo]
+            if (!form || !tipo) return null
+            const isSaving = savingConfig === config.idTipo
+            const esDestinatarioProp = tipo.destinatarios?.includes('propietarios')
+            const tieneOffset = tipo.codigo === 'vencimiento_pago' || tipo.codigo === 'gastos_generales'
+            const tieneDiaMes = form.frecuencia === 'mensual'
+            const color = esDestinatarioProp ? '#4a9eff' : '#a78bfa'
+
+            return (
+              <div key={config.idTipo} style={{ background:'var(--bg-surface)',border:`1px solid ${form.activo ? color + '40' : 'var(--border)'}`,borderRadius:'var(--radius-lg)',padding:'1.25rem',transition:'border-color 0.2s' }}>
+                <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1rem' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'0.25rem',flexWrap:'wrap' as const }}>
+                      <span style={{ fontSize:'0.72rem',fontWeight:700,color,background:`${color}15`,border:`1px solid ${color}30`,borderRadius:20,padding:'0.15rem 0.6rem',textTransform:'uppercase' as const,letterSpacing:'0.05em' }}>
+                        {tipo.destinatarios}
+                      </span>
+                      <h3 style={{ fontWeight:600,fontSize:'0.95rem' }}>{tipo.nombre}</h3>
+                    </div>
+                    <p style={{ fontSize:'0.8rem',color:'var(--text-muted)',lineHeight:1.5 }}>{tipo.descripcion}</p>
+                  </div>
+                  <button onClick={() => update(config.idTipo, 'activo', !form.activo)}
+                    style={{ background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:'0.35rem',padding:'0 0 0 1rem',flexShrink:0,color:form.activo?'var(--green)':'var(--text-muted)',fontFamily:'var(--font-body)',fontSize:'0.82rem',fontWeight:600 }}>
+                    {form.activo ? <ToggleRight size={24} color="var(--green)" /> : <ToggleLeft size={24} color="var(--text-muted)" />}
+                    {form.activo ? 'Activo' : 'Inactivo'}
+                  </button>
+                </div>
+
+                {form.activo && (
+                  <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0.75rem',marginBottom:'1rem',padding:'1rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)' }}>
+                    <div>
+                      <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                        <Clock size={11} /> Frecuencia
+                      </label>
+                      <select value={form.frecuencia || 'diario'} onChange={e => update(config.idTipo, 'frecuencia', e.target.value)} style={inp}>
+                        <option value="diario">Diario</option>
+                        <option value="mensual">Mensual</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                        <Clock size={11} /> Hora de envío
+                      </label>
+                      <input type="time" value={form.hora || '09:00'} onChange={e => update(config.idTipo, 'hora', e.target.value)} style={inp} />
+                    </div>
+                    {tieneDiaMes && (
+                      <div>
+                        <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                          <Calendar size={11} /> Día del mes
+                        </label>
+                        <input type="number" min={1} max={28} value={form.diaMes || 1} onChange={e => update(config.idTipo, 'diaMes', parseInt(e.target.value) || 1)} style={{ ...inp, width:'80px' }} />
+                      </div>
+                    )}
+                    {tieneOffset && (
+                      <div>
+                        <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
+                          <Clock size={11} /> Días de espera
+                        </label>
+                        <input type="number" min={0} max={60} value={form.diasOffset ?? 0} onChange={e => update(config.idTipo, 'diasOffset', parseInt(e.target.value) || 0)} style={{ ...inp, width:'80px' }} />
+                        <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>
+                          {tipo.codigo === 'vencimiento_pago' ? 'días desde envío del mensaje' : 'días desde creación del gasto'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+                  {form.activo && form.hora && (
+                    <p style={{ fontSize:'0.75rem',color:'var(--text-muted)' }}>
+                      Cron: <code style={{ background:'var(--bg-elevated)',padding:'0.1rem 0.4rem',borderRadius:4,fontSize:'0.75rem' }}>
+                        {buildCronSimple(form.hora, form.frecuencia, form.diaMes)}
+                      </code>
+                    </p>
+                  )}
+                  <div style={{ marginLeft:'auto' }}>
+                    <button onClick={() => handleSave(config.idTipo)} disabled={!!isSaving}
+                      style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:form.activo?'var(--accent)':'var(--bg-elevated)',color:form.activo?'#0f1117':'var(--text-secondary)',fontWeight:600,fontSize:'0.8rem',padding:'0.5rem 1rem',borderRadius:'var(--radius)',border:`1px solid ${form.activo?'var(--accent)':'var(--border)'}`,cursor:'pointer',fontFamily:'var(--font-body)' }}>
+                      {isSaving ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+
+  function buildCronSimple(hora: string, frecuencia: string, diaMes: number) {
+    const [h, m] = (hora || '09:00').split(':')
+    return frecuencia === 'mensual' ? `${m} ${h} ${diaMes} * *` : `${m} ${h} * * *`
+  }
+}
+
+// ── Componente TiposNotifTab (solo supervisor) ────────────────
+function TiposNotifTab({ tipos, onReload }: any) {
+  const [creating, setCreating] = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [form, setForm]         = useState({ codigo:'', nombre:'', descripcion:'', destinatarios:'propietarios', orden:0 })
+  const inp: React.CSSProperties = { width:'100%',background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.45rem 0.7rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
+
+  const handleCreate = async () => {
+    if (!form.codigo || !form.nombre) return toast.error('Código y nombre son requeridos')
+    setSaving(true)
+    try {
+      await api.post('/notificacion-tipo', form)
+      toast.success('Tipo creado')
+      setCreating(false)
+      setForm({ codigo:'', nombre:'', descripcion:'', destinatarios:'propietarios', orden:0 })
+      onReload()
+    } catch (e: any) { toast.error(e?.response?.data?.message || 'Error') }
+    finally { setSaving(false) }
+  }
+
+  const handleToggle = async (id: string) => {
+    try {
+      await api.patch(`/notificacion-tipo/${id}/toggle`)
+      onReload()
+    } catch { toast.error('Error') }
+  }
+
+  return (
+    <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
+      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+        <div>
+          <h3 style={{ fontWeight:600,fontSize:'1rem' }}>Tipos de notificación</h3>
+          <p style={{ fontSize:'0.8rem',color:'var(--text-muted)' }}>Catálogo de notificaciones disponibles para todos los grupos</p>
+        </div>
+        <button onClick={() => setCreating(true)}
+          style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.55rem 1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }}>
+          <Plus size={15} /> Nuevo tipo
+        </button>
       </div>
 
-      {tiposOrden.map(tipo => {
-        const cfg  = TIPO_CFG[tipo]
-        const form = forms[tipo]
-        if (!form) return null
-        const isSaving = savingConfig === tipo
-        const esPropietario = ['vencimiento_pago', 'gastos_generales'].includes(tipo)
-        const tieneOffset   = ['vencimiento_pago', 'gastos_generales'].includes(tipo)
-        const tieneDiaMes   = tipo === 'recoleccion_medicion'
-        const tieneDestinatarios = ['recoleccion_medicion', 'vencimiento_servicio'].includes(tipo)
-
-        return (
-          <div key={tipo} style={{ background:'var(--bg-surface)',border:`1px solid ${form.activo ? cfg.color + '40' : 'var(--border)'}`,borderRadius:'var(--radius-lg)',padding:'1.25rem',transition:'border-color 0.2s' }}>
-            {/* Header de la tarjeta */}
-            <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1rem' }}>
-              <div style={{ flex:1 }}>
-                <div style={{ display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'0.25rem' }}>
-                  <span style={{ fontSize:'0.72rem',fontWeight:700,color:cfg.color,background:`${cfg.color}15`,border:`1px solid ${cfg.color}30`,borderRadius:20,padding:'0.15rem 0.6rem',textTransform:'uppercase',letterSpacing:'0.05em' }}>
-                    {cfg.destinatario}
-                  </span>
-                  <h3 style={{ fontWeight:600,fontSize:'0.95rem' }}>{cfg.titulo}</h3>
-                </div>
-                <p style={{ fontSize:'0.8rem',color:'var(--text-muted)',lineHeight:1.5 }}>{cfg.desc}</p>
-              </div>
-              {/* Toggle activo */}
-              <button onClick={() => update(tipo, 'activo', !form.activo)}
-                style={{ background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:'0.35rem',padding:'0 0 0 1rem',flexShrink:0,color:form.activo?'var(--green)':'var(--text-muted)',fontFamily:'var(--font-body)',fontSize:'0.82rem',fontWeight:600 }}>
-                {form.activo
-                  ? <ToggleRight size={24} color="var(--green)" />
-                  : <ToggleLeft  size={24} color="var(--text-muted)" />}
-                {form.activo ? 'Activo' : 'Inactivo'}
-              </button>
+      {creating && (
+        <div style={{ background:'var(--bg-surface)',border:'1px solid var(--accent)',borderRadius:'var(--radius-lg)',padding:'1.25rem' }}>
+          <h4 style={{ fontWeight:600,marginBottom:'1rem' }}>Nuevo tipo de notificación</h4>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem',marginBottom:'1rem' }}>
+            <div>
+              <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',display:'block',marginBottom:'0.3rem' }}>Código * (letras y guiones bajos)</label>
+              <input value={form.codigo} onChange={e => setForm(p => ({ ...p, codigo: e.target.value.toLowerCase().replace(/[^a-z_]/g,'') }))} placeholder="ej: recordatorio_reunion" style={inp} />
             </div>
-
-            {/* Configuración (solo si activo) */}
-            {form.activo && (
-              <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'0.75rem',marginBottom:'1rem',padding:'1rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)' }}>
-                {/* Hora de envío */}
-                <div>
-                  <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
-                    <Clock size={11} /> Hora de envío
-                  </label>
-                  <input type="time" value={form.horaEnvio || '09:00'} onChange={e => update(tipo, 'horaEnvio', e.target.value)} style={inp} />
-                </div>
-
-                {/* Días de offset */}
-                {tieneOffset && (
-                  <div>
-                    <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
-                      <Clock size={11} /> Días de espera
-                    </label>
-                    <input type="number" min={0} max={60} value={form.diasOffset ?? 0}
-                      onChange={e => update(tipo, 'diasOffset', parseInt(e.target.value) || 0)} style={{ ...inp, width:'80px' }} />
-                    <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>
-                      {tipo === 'vencimiento_pago'
-                        ? 'días desde el envío del mensaje'
-                        : 'días desde creación del gasto'}
-                    </p>
-                  </div>
-                )}
-
-                {/* Día del mes */}
-                {tieneDiaMes && (
-                  <div>
-                    <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
-                      <Calendar size={11} /> Día del mes
-                    </label>
-                    <input type="number" min={1} max={28} value={form.diaMes ?? 1}
-                      onChange={e => update(tipo, 'diaMes', parseInt(e.target.value) || 1)} style={{ ...inp, width:'80px' }} />
-                    <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>día 1-28 del mes</p>
-                  </div>
-                )}
-
-                {/* Destinatarios gestión */}
-                {tieneDestinatarios && (
-                  <div>
-                    <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.04em',display:'flex',alignItems:'center',gap:'0.3rem',marginBottom:'0.35rem' }}>
-                      <Users size={11} /> Destinatarios
-                    </label>
-                    <select value={form.destinatariosGestion || 'ambos'} onChange={e => update(tipo, 'destinatariosGestion', e.target.value)} style={inp}>
-                      <option value="ambos">Gestión + Administrador</option>
-                      <option value="gestion">Solo Gestión</option>
-                      <option value="administrador">Solo Administrador</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Botón guardar */}
-            <div style={{ display:'flex',justifyContent:'flex-end' }}>
-              <button onClick={() => onSave(form)} disabled={!!isSaving}
-                style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:form.activo?'var(--accent)':'var(--bg-elevated)',color:form.activo?'#0f1117':'var(--text-secondary)',fontWeight:600,fontSize:'0.8rem',padding:'0.5rem 1rem',borderRadius:'var(--radius)',border:`1px solid ${form.activo?'var(--accent)':'var(--border)'}`,cursor:'pointer',fontFamily:'var(--font-body)' }}>
-                {isSaving ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
-                Guardar
-              </button>
+            <div>
+              <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',display:'block',marginBottom:'0.3rem' }}>Nombre *</label>
+              <input value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="ej: Recordatorio de reunión" style={inp} />
+            </div>
+            <div style={{ gridColumn:'span 2' }}>
+              <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',display:'block',marginBottom:'0.3rem' }}>Descripción</label>
+              <input value={form.descripcion} onChange={e => setForm(p => ({ ...p, descripcion: e.target.value }))} placeholder="Descripción del tipo de notificación" style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',display:'block',marginBottom:'0.3rem' }}>Destinatarios *</label>
+              <select value={form.destinatarios} onChange={e => setForm(p => ({ ...p, destinatarios: e.target.value }))} style={inp}>
+                <option value="propietarios">Propietarios</option>
+                <option value="gestion">Gestión</option>
+                <option value="admin">Administrador</option>
+                <option value="gestion,admin">Gestión + Administrador</option>
+                <option value="propietarios,gestion,admin">Todos</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',display:'block',marginBottom:'0.3rem' }}>Orden</label>
+              <input type="number" min={0} value={form.orden} onChange={e => setForm(p => ({ ...p, orden: parseInt(e.target.value) || 0 }))} style={{ ...inp, width:'80px' }} />
             </div>
           </div>
-        )
-      })}
+          <div style={{ display:'flex',gap:'0.75rem',justifyContent:'flex-end' }}>
+            <button onClick={() => setCreating(false)} style={{ background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-secondary)',fontWeight:500,fontSize:'0.875rem',padding:'0.5rem 1rem',borderRadius:'var(--radius)',cursor:'pointer',fontFamily:'var(--font-body)' }}>Cancelar</button>
+            <button onClick={handleCreate} disabled={saving}
+              style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.875rem',padding:'0.55rem 1rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }}>
+              {saving ? <Loader2 size={14} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={14} />}
+              Crear tipo
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',overflow:'hidden' }}>
+        <table style={{ width:'100%',borderCollapse:'collapse',fontSize:'0.875rem' }}>
+          <thead>
+            <tr>
+              {['Código','Nombre','Destinatarios','Descripción','Estado',''].map(h => (
+                <th key={h} style={{ textAlign:'left',padding:'0.75rem 1rem',color:'var(--text-muted)',fontSize:'0.7rem',fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase' as const,borderBottom:'1px solid var(--border)',background:'var(--bg-elevated)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tipos.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding:'2rem',textAlign:'center',color:'var(--text-muted)' }}>No hay tipos registrados</td></tr>
+            ) : tipos.map((t: any, i: number) => (
+              <tr key={t.id} style={{ opacity:t.activo?1:0.5,...(i%2!==0?{background:'rgba(255,255,255,0.02)'}:{}) }}>
+                <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
+                  <code style={{ fontSize:'0.8rem',background:'var(--bg-elevated)',padding:'0.1rem 0.4rem',borderRadius:4 }}>{t.codigo}</code>
+                </td>
+                <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',fontWeight:600 }}>{t.nombre}</td>
+                <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontSize:'0.75rem',background:'var(--accent-dim)',color:'var(--accent)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:4,padding:'0.15rem 0.5rem' }}>{t.destinatarios}</span>
+                </td>
+                <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)',fontSize:'0.8rem',color:'var(--text-muted)',maxWidth:200 }}>{t.descripcion || '—'}</td>
+                <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
+                  <button onClick={() => handleToggle(t.id)}
+                    style={{ display:'flex',alignItems:'center',gap:'0.3rem',background:'none',border:'none',cursor:'pointer',color:t.activo?'var(--green)':'var(--text-muted)',fontFamily:'var(--font-body)',fontSize:'0.8rem',padding:0 }}>
+                    {t.activo ? <ToggleRight size={18} color="var(--green)" /> : <ToggleLeft size={18} color="var(--text-muted)" />}
+                    {t.activo ? 'Activo' : 'Inactivo'}
+                  </button>
+                </td>
+                <td style={{ padding:'0.75rem 1rem',borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontSize:'0.72rem',color:'var(--text-muted)' }}>#{t.orden}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
-
-// ── Estilos ───────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
   ctrlLabel:    { fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em' },

@@ -2,97 +2,88 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { NotificacionConfig, TipoNotificacion } from './notificacion-config.entity';
+import { NotificacionConfig } from './notificacion-config.entity';
+import { NotificacionTipo } from '../notificacion-tipo/notificacion-tipo.entity';
 import { UpsertNotificacionConfigDto } from './notificacion-config.dto';
-
-// Configuración por defecto para cada tipo al inicializarse
-const DEFAULTS: Record<TipoNotificacion, Partial<NotificacionConfig>> = {
-  [TipoNotificacion.VENCIMIENTO_PAGO]: {
-    activo: false, horaEnvio: '09:00', diasOffset: 2,
-    diaMes: null, destinatariosGestion: null,
-  },
-  [TipoNotificacion.GASTOS_GENERALES]: {
-    activo: false, horaEnvio: '09:00', diasOffset: 1,
-    diaMes: null, destinatariosGestion: null,
-  },
-  [TipoNotificacion.RECOLECCION_MEDICION]: {
-    activo: false, horaEnvio: '08:00', diasOffset: 0,
-    diaMes: 1, destinatariosGestion: 'ambos' as any,
-  },
-  [TipoNotificacion.VENCIMIENTO_SERVICIO]: {
-    activo: false, horaEnvio: '08:00', diasOffset: 0,
-    diaMes: null, destinatariosGestion: 'ambos' as any,
-  },
-};
 
 @Injectable()
 export class NotificacionConfigService {
   constructor(
     @InjectRepository(NotificacionConfig)
     private readonly repo: Repository<NotificacionConfig>,
+    @InjectRepository(NotificacionTipo)
+    private readonly tipoRepo: Repository<NotificacionTipo>,
   ) {}
 
-  // Devuelve las 4 configuraciones del grupo (crea defaults si no existen)
-  async getByGrupo(idGrupo: string): Promise<NotificacionConfig[]> {
-    const existing = await this.repo.find({ where: { idGrupo } });
-    const existingTipos = existing.map(c => c.tipo);
-    const allTipos = Object.values(TipoNotificacion);
+  // Devuelve configuración de un edificio con todos los tipos activos
+  // Si no existe config para un tipo, devuelve defaults
+  async getByEdificio(idEdificio: string): Promise<any[]> {
+    const tipos  = await this.tipoRepo.find({ where: { activo: true }, order: { orden: 'ASC' } });
+    const configs = await this.repo.find({ where: { idEdificio }, relations: ['tipo'] });
 
-    // Crear defaults para los tipos que no existen
-    const missing = allTipos.filter(t => !existingTipos.includes(t));
-    if (missing.length > 0) {
-      const toCreate = missing.map(tipo =>
-        this.repo.create({ idGrupo, tipo, ...DEFAULTS[tipo] }),
-      );
-      const saved = await this.repo.save(toCreate);
-      return [...existing, ...saved].sort((a, b) => a.tipo.localeCompare(b.tipo));
-    }
+    const configByTipo: Record<string, NotificacionConfig> = {};
+    configs.forEach(c => { configByTipo[c.idTipo] = c });
 
-    return existing.sort((a, b) => a.tipo.localeCompare(b.tipo));
+    // Devolver los 4 tipos con su config o defaults
+    return tipos.map(tipo => {
+      const config = configByTipo[tipo.id];
+      return {
+        idTipo:        tipo.id,
+        tipo:          { id: tipo.id, codigo: tipo.codigo, nombre: tipo.nombre, descripcion: tipo.descripcion, destinatarios: tipo.destinatarios },
+        activo:        config?.activo        ?? false,
+        cronExpresion: config?.cronExpresion ?? '0 9 * * *',
+        diasOffset:    config?.diasOffset    ?? 0,
+        configId:      config?.id            ?? null,
+      };
+    });
   }
 
   // Upsert de una configuración específica
-  async upsert(idGrupo: string, dto: UpsertNotificacionConfigDto): Promise<NotificacionConfig> {
+  async upsert(idEdificio: string, dto: UpsertNotificacionConfigDto): Promise<NotificacionConfig> {
     const existing = await this.repo.findOne({
-      where: { idGrupo, tipo: dto.tipo },
+      where: { idEdificio, idTipo: dto.idTipo },
     });
 
     if (existing) {
-      Object.assign(existing, {
-        activo:                dto.activo,
-        horaEnvio:             dto.horaEnvio,
-        diasOffset:            dto.diasOffset ?? existing.diasOffset,
-        diaMes:                dto.diaMes ?? existing.diaMes,
-        destinatariosGestion:  dto.destinatariosGestion ?? existing.destinatariosGestion,
-      });
+      existing.activo        = dto.activo;
+      existing.cronExpresion = dto.cronExpresion;
+      existing.diasOffset    = dto.diasOffset ?? existing.diasOffset;
       return this.repo.save(existing);
     }
 
     return this.repo.save(
       this.repo.create({
-        idGrupo,
-        tipo:                 dto.tipo,
-        activo:               dto.activo,
-        horaEnvio:            dto.horaEnvio,
-        diasOffset:           dto.diasOffset ?? DEFAULTS[dto.tipo].diasOffset ?? 0,
-        diaMes:               dto.diaMes ?? DEFAULTS[dto.tipo].diaMes ?? null,
-        destinatariosGestion: dto.destinatariosGestion ?? DEFAULTS[dto.tipo].destinatariosGestion ?? null,
+        idEdificio,
+        idTipo:        dto.idTipo,
+        activo:        dto.activo,
+        cronExpresion: dto.cronExpresion,
+        diasOffset:    dto.diasOffset ?? 0,
       }),
     );
   }
 
-  // Bulk upsert de todas las configuraciones del grupo
-  async bulkUpsert(idGrupo: string, configs: UpsertNotificacionConfigDto[]): Promise<NotificacionConfig[]> {
-    return Promise.all(configs.map(c => this.upsert(idGrupo, c)));
+  // Bulk upsert — guardar todas las configs del edificio a la vez
+  async bulkUpsert(idEdificio: string, configs: UpsertNotificacionConfigDto[]): Promise<any[]> {
+    await Promise.all(configs.map(c => this.upsert(idEdificio, c)));
+    return this.getByEdificio(idEdificio);
   }
 
-  // Usado por el scheduler — obtiene TODAS las configs activas
+  // Para el scheduler — obtener todas las configs activas con su tipo
   async getAllActivas(): Promise<NotificacionConfig[]> {
-    return this.repo.find({ where: { activo: true }, relations: ['grupo'] });
+    return this.repo.find({
+      where: { activo: true },
+      relations: ['tipo'],
+    });
   }
 
-  // Usado por el scheduler — filtra por tipo
-  async getActivasByTipo(tipo: TipoNotificacion): Promise<NotificacionConfig[]> {
-    return this.repo.find({ where: { activo: true, tipo }, relations: ['grupo'] });
+  // Para el scheduler — filtrar por código de tipo
+  async getActivasByCodigo(codigo: string): Promise<NotificacionConfig[]> {
+    return this.repo
+      .createQueryBuilder('nc')
+      .innerJoinAndSelect('nc.tipo', 'nt')
+      .where('nc.activo = true')
+      .andWhere('nt.codigo = :codigo', { codigo })
+      .andWhere('nt.activo = true')
+      .getMany();
   }
 }

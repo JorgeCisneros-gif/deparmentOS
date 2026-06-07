@@ -24,7 +24,7 @@ import { PaisesModule } from './paises/paises.module';
 import { MailModule } from './mail/mail.module';
 import { NotificacionConfigModule } from './notificacion-config/notificacion-config.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
-
+import { NotificacionTipoModule } from './notificacion-tipo/notificacion-tipo.module';
 @Module({
   imports: [
     TypeOrmModule.forRoot({
@@ -60,6 +60,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     AlicuotasModule,
     PaisesModule,
     NotificacionConfigModule,
+    NotificacionTipoModule,
     SchedulerModule,
   ],
 })
