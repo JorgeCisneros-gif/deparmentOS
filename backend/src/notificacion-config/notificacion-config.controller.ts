@@ -28,6 +28,8 @@ export class NotificacionConfigController {
   @ApiOperation({ summary: 'Obtener configuraciones del grupo del usuario' })
   getMiGrupo(@Request() req: any) {
     const idGrupo = req.user.idGrupo;
+    // Supervisor no tiene grupo propio — devolver vacío
+    if (!idGrupo) return [];
     return this.svc.getByGrupo(idGrupo);
   }
 

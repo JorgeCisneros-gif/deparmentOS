@@ -52,6 +52,8 @@ export default function NotificacionesPage() {
   const [notifConfigs, setNotifConfigs] = useState<any[]>([])
   const [loadingConfigs, setLoadingConfigs] = useState(false)
   const [savingConfig, setSavingConfig] = useState<string | null>(null)
+  const [grupos, setGrupos] = useState<any[]>([])
+  const [selectedGrupoNotif, setSelectedGrupoNotif] = useState('')
 
   useEffect(() => {
     if (!selBuilding) return
@@ -64,20 +66,38 @@ export default function NotificacionesPage() {
 
   useEffect(() => { if (selBuilding && tab === 'mensajes') loadMessages() }, [mes, anio])
 
-  const loadNotifConfigs = async () => {
+  const loadNotifConfigs = async (idGrupoOverride?: string) => {
     setLoadingConfigs(true)
     try {
-      const { data } = await api.get('/notificacion-config/mi-grupo')
+      const url = idGrupoOverride
+        ? `/notificacion-config/grupo/${idGrupoOverride}`
+        : '/notificacion-config/mi-grupo'
+      const { data } = await api.get(url)
       setNotifConfigs(data || [])
     } catch {} finally { setLoadingConfigs(false) }
   }
 
+  // Cargar grupos para supervisor
+  useEffect(() => {
+    api.get('/grupos').then(r => {
+      const g = (r.data || []).filter((g: any) => g.nombre !== 'SuperGrupo')
+      setGrupos(g)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (selectedGrupoNotif) loadNotifConfigs(selectedGrupoNotif)
+  }, [selectedGrupoNotif])
+
   const saveNotifConfig = async (config: any) => {
     setSavingConfig(config.tipo)
     try {
-      await api.put('/notificacion-config/mi-grupo', config)
+      const url = selectedGrupoNotif
+        ? `/notificacion-config/grupo/${selectedGrupoNotif}`
+        : '/notificacion-config/mi-grupo'
+      await api.put(url, config)
       toast.success('Configuración guardada')
-      loadNotifConfigs()
+      loadNotifConfigs(selectedGrupoNotif || undefined)
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Error guardando')
     } finally { setSavingConfig(null) }
@@ -393,6 +413,37 @@ export default function NotificacionesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tab Programación */}
+      {tab === 'programacion' && (
+        <>
+          {grupos.length > 0 && (
+            <div style={{ marginBottom:'1rem' }}>
+              <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.05em',display:'block',marginBottom:'0.35rem' }}>
+                Grupo
+              </label>
+              <select value={selectedGrupoNotif}
+                onChange={e => setSelectedGrupoNotif(e.target.value)}
+                style={{ background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',minWidth:240 }}>
+                <option value="">— Seleccionar grupo —</option>
+                {grupos.map((g: any) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+              </select>
+            </div>
+          )}
+          {(selectedGrupoNotif || grupos.length === 0) ? (
+            <ProgramacionTab
+              configs={notifConfigs}
+              loadingConfigs={loadingConfigs}
+              savingConfig={savingConfig}
+              onSave={saveNotifConfig}
+            />
+          ) : grupos.length > 0 ? (
+            <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-muted)',fontSize:'0.875rem' }}>
+              Selecciona un grupo para ver su configuración de notificaciones
+            </div>
+          ) : null}
+        </>
       )}
 
       {/* Modales */}
