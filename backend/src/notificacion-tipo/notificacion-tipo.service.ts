@@ -29,7 +29,8 @@ export class NotificacionTipoService {
   async create(dto: CreateNotificacionTipoDto): Promise<NotificacionTipo> {
     const exists = await this.repo.findOne({ where: { codigo: dto.codigo } });
     if (exists) throw new ConflictException(`Ya existe un tipo con código "${dto.codigo}"`);
-    return this.repo.save(this.repo.create(dto));
+    const nuevo = this.repo.create(dto);
+    return this.repo.save(nuevo);
   }
 
   async update(id: string, dto: UpdateNotificacionTipoDto): Promise<NotificacionTipo> {
