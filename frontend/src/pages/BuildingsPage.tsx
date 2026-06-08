@@ -88,7 +88,7 @@ export default function BuildingsPage() {
       // Cargar grupos para el selector (solo supervisor)
       if (isSupervisor()) {
         const gRes = await api.get('/grupos')
-        setGrupos(gRes.data.filter((g: any) => g.nombre !== 'SuperGrupo'))
+        setGrupos(gRes.data || [])
       }
     } catch { toast.error('Error cargando edificios') }
     finally { setLoading(false) }

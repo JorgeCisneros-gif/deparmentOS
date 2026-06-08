@@ -64,7 +64,8 @@ export default function NotificacionesPage() {
   useEffect(() => {
     if (!isSupervisor()) return
     api.get('/grupos').then(r => {
-      setGrupos((r.data || []).filter((g: any) => g.nombre !== 'SuperGrupo'))
+      // Incluir SuperGrupo para que el supervisor pueda configurar sus edificios
+      setGrupos(r.data || [])
     }).catch(() => {})
   }, [])
 
@@ -78,7 +79,7 @@ export default function NotificacionesPage() {
 
   // Al seleccionar edificio (para programación) → cargar configs
   useEffect(() => {
-    const id = isSupervisor() ? selectedEdifNotif : selBuilding
+    const id = selectedEdifNotif || selBuilding
     if (!id) return
     loadNotifConfigs(id)
   }, [selectedEdifNotif, selBuilding])
@@ -203,7 +204,7 @@ export default function NotificacionesPage() {
   }
 
   const saveNotifConfig = async (config: any) => {
-    const idEdificio = isSupervisor() ? selectedEdifNotif : selBuilding
+    const idEdificio = selectedEdifNotif || selBuilding
     if (!idEdificio) return toast.error('Selecciona un edificio')
     setSavingConfig(config.idTipo)
     try {
@@ -657,7 +658,9 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
     onSave({ idTipo, activo: form.activo ?? false, cronExpresion, diasOffset: form.diasOffset ?? 0 })
   }
 
-  const idEdificio = isSupervisor ? selectedEdifNotif : selBuilding
+  // Para supervisor: usa el edificio seleccionado en el selector de grupo+edificio
+  // Para admin/gestión: usa el edificio del selector principal (selBuilding)
+  const idEdificio = isSupervisor ? (selectedEdifNotif || selBuilding) : selBuilding
   const sinEdificio = !idEdificio
 
   return (
