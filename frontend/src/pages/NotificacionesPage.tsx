@@ -798,10 +798,6 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
     </div>
   )
 
-  function buildCronSimple(hora: string, frecuencia: string, diaMes: number) {
-    const [h, m] = (hora || '09:00').split(':')
-    return frecuencia === 'mensual' ? `${m} ${h} ${diaMes} * *` : `${m} ${h} * * *`
-  }
 }
 
 // ── Componente TiposNotifTab (solo supervisor) ────────────────
