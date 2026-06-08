@@ -1,87 +1,74 @@
 // public/sw.js
-// Service Worker de DepartmOS
-// Maneja notificaciones push aunque la app esté cerrada
+// Service Worker para notificaciones push web (PWA)
+// IMPORTANTE: la URL de click siempre usa la URL de producción,
+// nunca la URL donde se registró el SW (evita redirects a ngrok u otros orígenes)
 
-const APP_NAME = self.APP_NAME || 'DepartmOS'
-const CACHE_NAME = `${APP_NAME.toLowerCase().replace(/\s/g,'_')}-v1`
+const APP_URL = 'https://deparmentos.suite-os.app'
 
-// ── Instalación ───────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando Service Worker...')
+  console.log('[SW] Instalado')
   self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Service Worker activado')
-  event.waitUntil(clients.claim())
+  console.log('[SW] Activado')
+  event.waitUntil(self.clients.claim())
 })
 
-// ── Push: recibir notificación del servidor ───────────────────
+// ── Recibir notificación push ─────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return
 
-  let payload
+  let data
   try {
-    payload = event.data.json()
+    data = event.data.json()
   } catch {
-    payload = {
-      title: APP_NAME,
-      body:  event.data.text(),
-      icon:  '/icons/icon-192.png',
-      url:   '/',
-    }
+    data = { title: 'DepartmOS', body: event.data.text(), url: '/' }
   }
 
+  const title   = data.title || 'DepartmOS'
   const options = {
-    body:             payload.body,
-    icon:             payload.icon  || '/icons/icon-192.png',
-    badge:            payload.badge || '/icons/badge-72.png',
-    tag:              payload.tag   || 'departmos-notification',
-    renotify:         true,
+    body:    data.body   || '',
+    icon:    data.icon   || '/icons/icon-192.png',
+    badge:   data.badge  || '/icons/badge-72.png',
+    tag:     data.tag    || 'departmos',
+    data:    { url: data.url || '/' },  // guardar URL en data para usarla en click
+    actions: [{ action: 'open', title: 'Ver detalles' }],
     requireInteraction: false,
-    vibrate:          [200, 100, 200],
-    data: {
-      url: payload.url || '/',
-    },
-    actions: [
-      { action: 'open',    title: 'Ver detalle' },
-      { action: 'dismiss', title: 'Descartar'   },
-    ],
   }
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title, options)
-  )
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
-// ── Click en la notificación ──────────────────────────────────
+// ── Click en notificación ─────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  if (event.action === 'dismiss') return
+  const relativeUrl = event.notification.data?.url || '/'
 
-  const targetUrl = event.notification.data?.url || '/'
+  // Siempre construir URL absoluta con dominio de producción
+  // Esto evita que se abra la URL de ngrok u otro origen
+  const absoluteUrl = relativeUrl.startsWith('http')
+    ? relativeUrl
+    : `${APP_URL}${relativeUrl}`
+
+  console.log('[SW] Click en notificación → abriendo:', absoluteUrl)
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Si la app ya está abierta, enfoca esa pestaña
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus()
-          client.navigate(targetUrl)
-          return
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        // Si ya hay una ventana de la app abierta, enfocarla y navegar
+        for (const client of clients) {
+          if (client.url.startsWith(APP_URL) && 'focus' in client) {
+            client.focus()
+            if ('navigate' in client) client.navigate(absoluteUrl)
+            return
+          }
         }
-      }
-      // Si no está abierta, abre una ventana nueva
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl)
-      }
-    })
+        // Si no hay ventana abierta, abrir una nueva
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(absoluteUrl)
+        }
+      })
   )
-})
-
-// ── Push subscription change (el browser rota las claves) ─────
-self.addEventListener('pushsubscriptionchange', (event) => {
-  console.log('[SW] Suscripción push cambió — re-suscribiendo...')
-  // El hook usePushNotifications en React maneja esto
 })
