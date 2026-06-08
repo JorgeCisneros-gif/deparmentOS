@@ -267,9 +267,9 @@ export default function NotificacionesPage() {
       {/* Tabs */}
       <div style={{ display:'flex',gap:'0.25rem',marginBottom:'1.5rem',background:'var(--bg-elevated)',borderRadius:'var(--radius)',padding:'0.25rem',width:'fit-content' }}>
         {(isSupervisor()
-          ? [['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell],['tipos','Tipos de Notif.',Settings]]
-          : [['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell]]
-        as any[]).map(([key,label,Icon]) => (
+          ? ([['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell],['tipos','Tipos de Notif.',Settings]] as any[])
+          : ([['mensajes','Mensajes',MessageSquare],['plantilla','Plantilla',Settings],['variables','Variables',Calculator],['programacion','Programación',Bell]] as any[])
+        ).map(([key,label,Icon]) => (
           <button key={key} onClick={() => setTab(key)}
             style={{ display:'flex',alignItems:'center',gap:'0.4rem',padding:'0.45rem 1rem',borderRadius:'calc(var(--radius) - 2px)',border:'none',background:tab===key?'var(--bg-surface)':'transparent',color:tab===key?'var(--accent)':'var(--text-secondary)',fontWeight:tab===key?600:400,fontSize:'0.875rem',cursor:'pointer',fontFamily:'var(--font-body)',boxShadow:tab===key?'0 1px 3px rgba(0,0,0,0.2)':undefined }}>
             <Icon size={15} /> {label}
