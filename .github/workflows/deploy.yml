@@ -39,7 +39,8 @@ jobs:
             cd ~/apps/deparmentOS
 
             echo "── Pull últimos cambios ──"
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
 
             echo "── Rebuild backend y servicios ──"
             docker compose up --build -d
