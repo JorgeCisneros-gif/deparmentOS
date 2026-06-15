@@ -1,16 +1,33 @@
+import base64
 import logging
 import os
 import re
 from typing import List, Optional, Tuple
 
 import cv2
-import easyocr
 import numpy as np
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+
+load_dotenv()
+
+# ==============================
+# CONFIGURACIÓN
+# ==============================
+OCR_ENGINE = os.getenv("OCR_ENGINE", "easyocr").strip().lower()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+
+VALID_ENGINES = {"easyocr", "groq"}
+if OCR_ENGINE not in VALID_ENGINES:
+    raise RuntimeError(f"OCR_ENGINE='{OCR_ENGINE}' inválido. Valores aceptados: {VALID_ENGINES}")
+
+if OCR_ENGINE == "groq" and not GROQ_API_KEY:
+    raise RuntimeError("OCR_ENGINE=groq requiere GROQ_API_KEY en el .env")
 
 # ==============================
 # LOGGING
@@ -21,18 +38,32 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("meter_ocr")
+log.info("Motor seleccionado: %s", OCR_ENGINE.upper())
 
-log.info("Cargando modelo EasyOCR…")
-READER = easyocr.Reader(["en"], gpu=False, verbose=False)
-log.info("Modelo EasyOCR listo")
+# ==============================
+# CARGA CONDICIONAL DE EASYOCR
+# ==============================
+READER = None
+if OCR_ENGINE == "easyocr":
+    import easyocr
+    log.info("Cargando modelo EasyOCR…")
+    READER = easyocr.Reader(["en"], gpu=False, verbose=False)
+    log.info("Modelo EasyOCR listo")
 
+# ==============================
+# APP FASTAPI
+# ==============================
 app = FastAPI(
     title="OCR Meter Reader API",
-    description="Lectura de medidores — EasyOCR local",
-    version="8.0.0",
+    description="Lectura de medidores — EasyOCR local o Groq Vision",
+    version="9.0.0",
 )
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
-                   allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class OCRResponse(BaseModel):
@@ -44,7 +75,7 @@ class OCRResponse(BaseModel):
 
 
 # ==============================
-# TEMPLATES (fallback último recurso)
+# TEMPLATES (fallback EasyOCR)
 # ==============================
 def _build_templates() -> dict:
     t = {}
@@ -58,15 +89,9 @@ TEMPLATES = _build_templates()
 
 
 # ==============================
-# PREPARACIÓN DEL ROI DE DISPLAY
+# PREPARACIÓN DEL ROI (compartido)
 # ==============================
 def _find_vertical_dividers(img_bgr: np.ndarray) -> Optional[List[int]]:
-    """
-    Detecta divisores verticales oscuros entre celdas del display.
-    Busca columnas donde >40 % de píxeles son oscuros (<80) — esas son las
-    líneas de borde del marco plástico de cada celda.
-    Retorna lista de posiciones x de los divisores (mínimo 3), o None.
-    """
     h = img_bgr.shape[0]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     col_dark = (gray < 80).sum(axis=0)
@@ -75,7 +100,6 @@ def _find_vertical_dividers(img_bgr: np.ndarray) -> Optional[List[int]]:
     if len(dark_cols) < 3:
         return None
 
-    # Agrupar columnas contiguas con tolerancia de 3 px → un divisor por grupo
     groups: List[int] = []
     g = [int(dark_cols[0])]
     for x in dark_cols[1:]:
@@ -90,37 +114,24 @@ def _find_vertical_dividers(img_bgr: np.ndarray) -> Optional[List[int]]:
 
 
 def detect_display(img_bgr: np.ndarray) -> np.ndarray:
-    """
-    Prepara el ROI a partir de una tira pre-recortada de la franja de dígitos.
-
-    Modo bordado (501-type): detecta las líneas oscuras verticales del marco
-    de cada celda para obtener límites exactos, luego recorta las 5 celdas
-    enteras y escala a ≥200 px de alto.
-
-    Modo fallback (201/202-type): escala a ≥200 px y recorta el 5/8 izquierdo
-    (5 celdas enteras vs 3 decimales ámbar de los medidores SUNPOOL).
-    """
     h, w = img_bgr.shape[:2]
     log.info("Imagen recibida: %dx%d", w, h)
 
     groups = _find_vertical_dividers(img_bgr)
 
     if groups and len(groups) >= 4:
-        # ── Modo bordado ──────────────────────────────────────────────────
-        # Tomar las primeras 5 celdas (= 6 divisores); si hay menos, usar todas.
         n_cells = min(5, len(groups) - 1)
         x_start = groups[0]
-        x_end   = groups[n_cells] + 1 if n_cells < len(groups) else w
+        x_end = groups[n_cells] + 1 if n_cells < len(groups) else w
 
-        # Recorte vertical: filas donde >20 % de px son oscuros = bordes del marco
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
         row_dark = (gray < 80).sum(axis=1)
         border_rows = np.where(row_dark > w * 0.20)[0]
-        y_start = int(border_rows[0])      if len(border_rows) >= 1 else 0
-        y_end   = int(border_rows[-1]) + 1 if len(border_rows) >= 2 else h
+        y_start = int(border_rows[0]) if len(border_rows) >= 1 else 0
+        y_end = int(border_rows[-1]) + 1 if len(border_rows) >= 2 else h
 
         display = img_bgr[y_start:y_end, x_start:x_end]
-        dh, dw  = display.shape[:2]
+        dh, dw = display.shape[:2]
 
         scale_s = max(1.0, 200.0 / dh)
         if scale_s > 1.0:
@@ -128,12 +139,10 @@ def detect_display(img_bgr: np.ndarray) -> np.ndarray:
                                  interpolation=cv2.INTER_CUBIC)
 
         log.info("ROI bordado: %d divisores → %d celdas, orig %dx%d → %dx%d",
-                 len(groups), n_cells, dw, dh,
-                 display.shape[1], display.shape[0])
+                 len(groups), n_cells, dw, dh, display.shape[1], display.shape[0])
         cv2.imwrite("debug_roi.png", display)
         return display
 
-    # ── Modo fallback ─────────────────────────────────────────────────────
     scale_s = max(1.0, 200.0 / h)
     if scale_s > 1.0:
         img_bgr = cv2.resize(img_bgr, None, fx=scale_s, fy=scale_s,
@@ -143,14 +152,99 @@ def detect_display(img_bgr: np.ndarray) -> np.ndarray:
 
     int_w = int(w * 5 / 8)
     display = img_bgr[:, :int_w]
-    log.info("ROI celdas enteras (5/8 fallback): %dx%d",
-             display.shape[1], display.shape[0])
+    log.info("ROI fallback 5/8: %dx%d", display.shape[1], display.shape[0])
     cv2.imwrite("debug_roi.png", display)
     return display
 
 
 # ==============================
-# OCR CON EASYOCR
+# ENGINE: GROQ VISION
+# ==============================
+def _encode_image_b64(img_bgr: np.ndarray) -> str:
+    _, buf = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    return base64.b64encode(buf.tobytes()).decode("utf-8")
+
+
+GROQ_PROMPT = (
+    "Analiza la imagen del medidor de agua. "
+    "REGLAS ESTRICTAS:\n"
+    "- El display tiene casillas con dígitos. Las primeras 5 casillas tienen dígitos en color NEGRO.\n"
+    "- Las casillas restantes (color rojo, naranja o amarillo) son decimales: IGNÓRALAS completamente.\n"
+    "- Lee ÚNICAMENTE los 5 primeros dígitos negros, de izquierda a derecha.\n"
+    "- NO incluyas decimales, NO redondees, NO agregues dígitos extra.\n"
+    "- La respuesta debe tener EXACTAMENTE 5 caracteres numéricos en 'text' y 'digits_only'.\n\n"
+    "Responde SOLO con este JSON (sin texto extra, sin backticks):\n"
+    '{"success": true, "text": "XXXXX", "digits_only": "XXXXX", "confidence": 0.95, "message": "Lectura exitosa"}'
+)
+
+
+def read_with_groq(image_bytes: bytes) -> Tuple[str, float, str]:
+    import json
+    import urllib.error
+    import urllib.request
+
+    log.info("Enviando imagen a Groq Vision (%d bytes)…", len(image_bytes))
+
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    payload = {
+        "model": GROQ_MODEL,
+        "max_tokens": 200,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                    },
+                    {"type": "text", "text": GROQ_PROMPT},
+                ],
+            }
+        ],
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.groq.com/openai/v1/chat/completions",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Groq HTTP {e.code}: {err_body}") from e
+
+    raw_text = body["choices"][0]["message"]["content"].strip()
+    log.info("Groq raw response: %s", raw_text)
+
+    try:
+        result = json.loads(raw_text)
+        digits = re.sub(r"[^0-9]", "", str(result.get("digits_only", "")))[:5]
+        conf = float(result.get("confidence", 0.9))
+        msg = result.get("message", "Lectura Groq")
+    except (json.JSONDecodeError, KeyError, ValueError):
+        digits = re.sub(r"[^0-9]", "", raw_text)[:5]
+        conf = 0.75
+        msg = "Lectura Groq (parse fallback)"
+
+    if not digits:
+        raise RuntimeError(f"Groq no retornó dígitos válidos. Respuesta: {raw_text}")
+
+    digits = digits.zfill(5) if len(digits) < 5 else digits
+    log.info("Groq resultado: '%s' conf=%.2f", digits, conf)
+    return digits, conf, "groq_vision"
+
+
+# ==============================
+# ENGINE: EASYOCR
 # ==============================
 def _run_easyocr(
     img_bgr: np.ndarray,
@@ -181,12 +275,10 @@ def _run_easyocr(
         if not digits or conf < min_conf:
             continue
         xs = [pt[0] for pt in bbox]
-        ys = [pt[1] for pt in bbox]
         items.append({
             "digits": digits,
-            "conf":   float(conf),
-            "x":      float(np.mean(xs)),
-            "y":      float(np.mean(ys)),
+            "conf": float(conf),
+            "x": float(np.mean(xs)),
         })
 
     if not items:
@@ -194,27 +286,18 @@ def _run_easyocr(
 
     items.sort(key=lambda i: i["x"])
     digits = "".join(i["digits"] for i in items)
-    conf   = float(np.mean([i["conf"] for i in items]))
+    conf = float(np.mean([i["conf"] for i in items]))
     return digits, conf
 
 
 def _read_strip_cells(strip_bgr: np.ndarray, n_cells: int = 5) -> Tuple[str, float]:
-    """
-    Lee la tira célula por célula con mag_ratio alto.
-
-    Primero intenta detectar los divisores oscuros verticales del marco
-    (modo bordado). Si no los encuentra, usa celdas de ancho igual con
-    un margen izquierdo de +5 px para saltar el separador plástico.
-    """
     _, w = strip_bgr.shape[:2]
     clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4, 4))
 
-    # — Intentar usar los divisores detectados por borde —
     groups = _find_vertical_dividers(strip_bgr)
     cells: List[tuple] = []
 
     if groups and len(groups) >= n_cells:
-        # Tomar los primeros n_cells+1 divisores para definir n_cells celdas
         divs = groups[:n_cells + 1]
         cells = [(divs[i] + 1, divs[i + 1]) for i in range(len(divs) - 1)
                  if divs[i + 1] - divs[i] > 5]
@@ -223,7 +306,6 @@ def _read_strip_cells(strip_bgr: np.ndarray, n_cells: int = 5) -> Tuple[str, flo
                  cells, [x2 - x1 for x1, x2 in cells])
 
     if len(cells) < 2:
-        # Fallback: ancho igual, margen izquierdo para saltar el separador
         cell_w = w // n_cells
         cells = [(max(0, i * cell_w + 5), min(w, (i + 1) * cell_w))
                  for i in range(n_cells)]
@@ -235,7 +317,6 @@ def _read_strip_cells(strip_bgr: np.ndarray, n_cells: int = 5) -> Tuple[str, flo
 
     for i, (x1, x2) in enumerate(cells):
         cell = strip_bgr[:, x1:x2]
-
         gray_c = clahe.apply(cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY))
         gray_bgr = cv2.cvtColor(gray_c, cv2.COLOR_GRAY2BGR)
         d, c = _run_easyocr(gray_bgr, mag_ratio=2.5,
@@ -256,18 +337,7 @@ def _read_strip_cells(strip_bgr: np.ndarray, n_cells: int = 5) -> Tuple[str, flo
     return result, avg_conf
 
 
-def read_with_easyocr(roi_bgr: np.ndarray) -> Tuple[str, float]:
-    """
-    Pipeline de 4 pasadas para leer los 5 dígitos enteros de la tira.
-
-    A) Color tal cual
-    B) Escala de grises + CLAHE
-    C) Escala de grises + CLAHE + umbral Otsu
-    D) Célula por célula con mag_ratio=2.5
-
-    Selección: preferir candidatos de exactamente 5 dígitos (mayor confianza);
-    si ninguno los alcanza, usar puntuación len × confianza.
-    """
+def read_with_easyocr_pipeline(roi_bgr: np.ndarray) -> Tuple[str, float]:
     h, _ = roi_bgr.shape[:2]
     scale = max(1.0, 150.0 / h)
     if scale > 1.0:
@@ -277,13 +347,11 @@ def read_with_easyocr(roi_bgr: np.ndarray) -> Tuple[str, float]:
     cv2.imwrite("debug_easyocr_input.png", roi_bgr)
     clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4, 4))
 
-    # Pasada A: color tal cual
     digits_a, conf_a = _run_easyocr(roi_bgr)
     log.info("EasyOCR pasada A: '%s' conf=%.2f", digits_a, conf_a)
     if len(digits_a) >= 5 and conf_a >= 0.60:
         return digits_a, conf_a
 
-    # Pasada B: escala de grises + CLAHE
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
     gray_enh = clahe.apply(gray)
     gray_bgr = cv2.cvtColor(gray_enh, cv2.COLOR_GRAY2BGR)
@@ -291,7 +359,6 @@ def read_with_easyocr(roi_bgr: np.ndarray) -> Tuple[str, float]:
     digits_b, conf_b = _run_easyocr(gray_bgr)
     log.info("EasyOCR pasada B (gray+CLAHE): '%s' conf=%.2f", digits_b, conf_b)
 
-    # Pasada C: escala de grises + CLAHE + umbral Otsu
     _, thresh = cv2.threshold(gray_enh, 0, 255,
                                cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     thresh_bgr = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
@@ -299,16 +366,11 @@ def read_with_easyocr(roi_bgr: np.ndarray) -> Tuple[str, float]:
     digits_c, conf_c = _run_easyocr(thresh_bgr)
     log.info("EasyOCR pasada C (gray+CLAHE+Otsu): '%s' conf=%.2f", digits_c, conf_c)
 
-    # Pasada D: gray+CLAHE con mag_ratio alto para trazos angostos ('1').
-    # A mag_ratio=3.5 el strip de 459 px se procesa a ~1600 px; cada carácter
-    # tiene ~280 px de alto y el trazo del '1' (~15 px orig.) pasa a ~52 px,
-    # superando con comodidad el umbral de detección de CRAFT.
     digits_d, conf_d = _run_easyocr(gray_bgr, mag_ratio=3.5,
                                      text_threshold=0.20, low_text=0.15,
                                      min_conf=0.15)
     log.info("EasyOCR pasada D (mag=3.5): '%s' conf=%.2f", digits_d, conf_d)
 
-    # Pasada E: célula por célula con mayor magnificación
     log.info("EasyOCR pasada E (celdas individuales):")
     digits_e, conf_e = _read_strip_cells(roi_bgr, n_cells=5)
     log.info("EasyOCR pasada E resultado: '%s' conf=%.2f", digits_e, conf_e)
@@ -331,7 +393,7 @@ def read_with_easyocr(roi_bgr: np.ndarray) -> Tuple[str, float]:
 
 
 # ==============================
-# FALLBACK — TEMPLATE MATCHING
+# FALLBACK TEMPLATE MATCHING
 # ==============================
 def _match_digit(d: np.ndarray) -> Tuple[str, float]:
     best, best_d = -1.0, "0"
@@ -386,27 +448,33 @@ def template_fallback(roi_bgr: np.ndarray) -> Tuple[str, float]:
 # PIPELINE PRINCIPAL
 # ==============================
 def read_meter(image_bytes: bytes) -> Tuple[str, float, str]:
-    log.info("=== Nueva lectura: %d bytes ===", len(image_bytes))
+    log.info("=== Nueva lectura: %d bytes — engine=%s ===", len(image_bytes), OCR_ENGINE)
+
+    if OCR_ENGINE == "groq":
+        digits, conf, method = read_with_groq(image_bytes)
+        d = re.sub(r"[^0-9]", "", digits)[:5]
+        reading = d.zfill(5)
+        log.info("RESULTADO Groq: '%s' conf=%.2f", reading, conf)
+        return reading, round(conf, 3), method
+
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError("Imagen inválida o corrupta — no se pudo decodificar")
 
     roi = detect_display(img)
-    digits, conf = read_with_easyocr(roi)
+    digits, conf = read_with_easyocr_pipeline(roi)
 
     if len(digits) >= 3 and conf >= 0.30:
         d = re.sub(r"[^0-9]", "", digits)[:5]
-        reading = f"{d}.999"
-        log.info("RESULTADO enteros: '%s' conf=%.2f", reading, conf)
-        return reading, round(conf, 3), "ocr_neuronal"
+        log.info("RESULTADO EasyOCR: '%s' conf=%.2f", d, conf)
+        return d, round(conf, 3), "easyocr_neuronal"
 
     log.warning("EasyOCR insuficiente ('%s' conf=%.2f) → plantillas", digits, conf)
     digits_t, conf_t = template_fallback(roi)
     d = re.sub(r"[^0-9]", "", digits_t)[:5]
-    reading = f"{d}.999"
-    log.info("RESULTADO plantillas: '%s' conf=%.3f", reading, conf_t)
-    return reading, round(conf_t, 3), "coincidencia_plantillas"
+    log.info("RESULTADO plantillas: '%s' conf=%.3f", d, conf_t)
+    return d, round(conf_t, 3), "coincidencia_plantillas"
 
 
 # ==============================
@@ -433,37 +501,38 @@ async def extract_text(file: UploadFile = File(...)):
 
 def _debug_file(path: str) -> FileResponse:
     if not os.path.isfile(path):
-        raise HTTPException(404, detail="Procese una imagen primero")
+        raise HTTPException(404, detail="Procese una imagen primero (engine=easyocr)")
     return FileResponse(path, media_type="image/png")
 
 
 @app.get("/debug/roi")
 def get_roi():
-    """Franja de 5 dígitos enteros enviada a EasyOCR."""
     return _debug_file("debug_roi.png")
 
 
 @app.get("/debug/easyocr")
 def get_easyocr_input():
-    """Imagen tal como la recibe EasyOCR (pasada A)."""
     return _debug_file("debug_easyocr_input.png")
 
 
 @app.get("/debug/clahe")
 def get_clahe():
-    """Imagen con gray+CLAHE (pasada B)."""
     return _debug_file("debug_easyocr_clahe.png")
 
 
 @app.get("/debug/thresh")
 def get_thresh():
-    """Umbral Otsu (pasada C)."""
     return _debug_file("debug_easyocr_thresh.png")
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "8.0.0", "engine": "easyocr"}
+    return {
+        "status": "ok",
+        "version": "9.0.0",
+        "engine": OCR_ENGINE,
+        "groq_model": GROQ_MODEL if OCR_ENGINE == "groq" else None,
+    }
 
 
 if __name__ == "__main__":
