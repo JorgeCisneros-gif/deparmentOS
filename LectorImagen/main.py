@@ -180,8 +180,7 @@ GROQ_PROMPT = (
 
 def read_with_groq(image_bytes: bytes) -> Tuple[str, float, str]:
     import json
-    import urllib.error
-    import urllib.request
+    import requests as _req
 
     log.info("Enviando imagen a Groq Vision (%d bytes)…", len(image_bytes))
 
@@ -204,23 +203,20 @@ def read_with_groq(image_bytes: bytes) -> Tuple[str, float, str]:
         ],
     }
 
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Groq HTTP {e.code}: {err_body}") from e
+        resp = _req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "User-Agent": "Mozilla/5.0",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+    except _req.HTTPError as e:
+        raise RuntimeError(f"Groq HTTP {e.response.status_code}: {e.response.text}") from e
 
     raw_text = body["choices"][0]["message"]["content"].strip()
     log.info("Groq raw response: %s", raw_text)
@@ -241,8 +237,6 @@ def read_with_groq(image_bytes: bytes) -> Tuple[str, float, str]:
     digits = digits.zfill(5) if len(digits) < 5 else digits
     log.info("Groq resultado: '%s' conf=%.2f", digits, conf)
     return digits, conf, "groq_vision"
-
-
 # ==============================
 # ENGINE: EASYOCR
 # ==============================
