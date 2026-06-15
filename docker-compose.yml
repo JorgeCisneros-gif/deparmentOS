@@ -77,6 +77,8 @@ services:
     build:
       context: ./LectorImagen
       dockerfile: Dockerfile
+      args:
+        OCR_ENGINE: ${OCR_ENGINE:-groq}
     container_name: edify_ocr
     restart: unless-stopped
     env_file: .env

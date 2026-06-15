@@ -1,5 +1,7 @@
 FROM python:3.11-slim
 
+ARG OCR_ENGINE=groq
+
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
@@ -7,16 +9,18 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgomp1 \
     libgl1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-groq.txt requirements-easyocr.txt ./
 
-# Pre-descargar el modelo de EasyOCR durante el build para que el
-# arranque en runtime sea inmediato (sin descarga al primer request)
-RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)"
+RUN if [ "$OCR_ENGINE" = "easyocr" ]; then \
+        pip install --no-cache-dir -r requirements-easyocr.txt; \
+    else \
+        pip install --no-cache-dir -r requirements-groq.txt; \
+    fi
 
 COPY main.py .
 
