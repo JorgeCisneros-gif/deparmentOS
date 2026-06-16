@@ -780,6 +780,7 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
             const color = esDestinatarioProp ? '#4a9eff' : '#a78bfa'
 
             return (
+              <>
               <div key={config.idTipo} style={{ background:'var(--bg-surface)',border:`1px solid ${form.activo ? color + '40' : 'var(--border)'}`,borderRadius:'var(--radius-lg)',padding:'1.25rem',transition:'border-color 0.2s' }}>
                 <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1rem' }}>
                   <div style={{ flex:1 }}>
