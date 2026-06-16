@@ -939,6 +939,7 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
             </React.Fragment>
             )
           })}
+        </>
       )}
     </div>
   )
