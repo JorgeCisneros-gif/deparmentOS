@@ -8,6 +8,7 @@ import { sendPushToEdificioRoles } from '../channels/push.channel'
 export async function runRecoleccionMedicion(
   idEdificio: string,
   destinatarios: string, // 'gestion' | 'admin' | 'gestion,admin'
+  tmpl?: NotifTemplate,
 ): Promise<void> {
   const roles = parseRoles(destinatarios)
 
