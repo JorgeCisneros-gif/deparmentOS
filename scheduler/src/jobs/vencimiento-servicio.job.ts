@@ -1,6 +1,8 @@
 // src/jobs/vencimiento-servicio.job.ts
 // Notifica cuando vence la fecha de pago de un recibo de servicio.
 import { query } from '../db/connection'
+import { renderTemplate, fmtMonto, fmtPeriodo } from '../utils/template'
+import { NotifTemplate } from './vencimiento-pago.job'
 import { sendPushToEdificioRoles } from '../channels/push.channel'
 
 interface ReciboVencido {
@@ -11,12 +13,10 @@ interface ReciboVencido {
   periodo_anio:    number
 }
 
-const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
-  'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
-
 export async function runVencimientoServicio(
   idEdificio: string,
   destinatarios: string,
+  tmpl?: NotifTemplate,
 ): Promise<void> {
   const hoy = new Date().toISOString().split('T')[0]
 
@@ -43,11 +43,12 @@ export async function runVencimientoServicio(
   console.log(`[VencServicio] ${recibos.length} recibo(s) vence(n) hoy — notificando [${roles.join(',')}]`)
 
   for (const recibo of recibos) {
-    const periodo = `${MESES[recibo.periodo_mes]} ${recibo.periodo_anio}`
+    const periodo = fmtPeriodo(recibo.periodo_mes, recibo.periodo_anio)
 
+    const vars = { servicio: recibo.nombre_servicio, periodo, monto: fmtMonto(recibo.monto_total) }
     const n = await sendPushToEdificioRoles(idEdificio, roles, {
-      title: `⚠️ Vence hoy: ${recibo.nombre_servicio}`,
-      body:  `El recibo de "${recibo.nombre_servicio}" (${periodo}) por S/. ${recibo.monto_total.toFixed(2)} vence hoy.`,
+      title: renderTemplate(tmpl?.titulo || '⚠️ Vence hoy: {servicio}', vars),
+      body:  renderTemplate(tmpl?.cuerpo || 'El recibo de "{servicio}" ({periodo}) por S/. {monto} vence hoy.', vars),
       url:   '/receipts',
       tag:   `venc-svc-${recibo.recibo_id}`,
     })

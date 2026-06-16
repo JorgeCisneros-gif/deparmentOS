@@ -1,6 +1,8 @@
 // src/jobs/recoleccion-medicion.job.ts
 // Recuerda a gestión/admin que deben registrar las mediciones del mes.
 import { query } from '../db/connection'
+import { renderTemplate } from '../utils/template'
+import { NotifTemplate } from './vencimiento-pago.job'
 import { sendPushToEdificioRoles } from '../channels/push.channel'
 
 export async function runRecoleccionMedicion(
@@ -12,8 +14,8 @@ export async function runRecoleccionMedicion(
   console.log(`[RecMedicion] Notificando roles [${roles.join(',')}] en edificio ${idEdificio}`)
 
   const n = await sendPushToEdificioRoles(idEdificio, roles, {
-    title: '📊 Recordatorio: Registro de mediciones',
-    body:  'Hoy es el día de registrar las lecturas de los medidores. Ingresa a Nueva Medición.',
+    title: renderTemplate(tmpl?.titulo || '📊 Recordatorio: Registro de mediciones', {}),
+    body:  renderTemplate(tmpl?.cuerpo || 'Hoy es el día de registrar las lecturas de los medidores. Ingresa a Nueva Medición.', {}),
     url:   '/readings/new',
     tag:   `recoleccion-${idEdificio}-${new Date().toDateString()}`,
   })

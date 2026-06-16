@@ -1,10 +1,8 @@
 // src/jobs/vencimiento-pago.job.ts
 // Notifica a propietarios con cuotas pendientes N días después del envío del mensaje.
 import { query } from '../db/connection'
+import { renderTemplate, fmtMonto, fmtPeriodo } from '../utils/template'
 import { sendPushToPropietario } from '../channels/push.channel'
-
-const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
-  'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
 
 interface CuotaPendiente {
   cuota_id:           string
@@ -21,9 +19,12 @@ interface CuotaPendiente {
   propietario_correo: string | null
 }
 
+export interface NotifTemplate { titulo?: string; cuerpo?: string }
+
 export async function runVencimientoPago(
   idEdificio: string,
   diasOffset: number,
+  tmpl?: NotifTemplate,
 ): Promise<void> {
   // Fecha límite: solo notificar cuotas cuyo mensaje se envió hace >= diasOffset días
   const offsetDate = new Date()
@@ -85,11 +86,12 @@ export async function runVencimientoPago(
     }
 
     const saldo = cuota.saldo || cuota.monto_total
-    const periodo = `${MESES[cuota.periodo_mes]} ${cuota.periodo_anio}`
+    const periodo = fmtPeriodo(cuota.periodo_mes, cuota.periodo_anio)
+    const vars = { periodo, departamento: cuota.departamento, saldo: fmtMonto(saldo) }
 
     const n = await sendPushToPropietario(cuota.propietario_id, {
-      title: `💰 Pago pendiente — ${periodo}`,
-      body:  `Depto ${cuota.departamento}: S/. ${saldo.toFixed(2)} pendiente. Por favor regulariza tu pago.`,
+      title: renderTemplate(tmpl?.titulo || '💰 Pago pendiente — {periodo}', vars),
+      body:  renderTemplate(tmpl?.cuerpo || 'Depto {departamento}: S/. {saldo} pendiente. Por favor regulariza tu pago.', vars),
       url:   '/mis-pagos',
       tag:   `venc-pago-${cuota.cuota_id}`,
     })

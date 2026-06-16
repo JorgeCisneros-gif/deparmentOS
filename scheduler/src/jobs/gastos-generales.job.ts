@@ -1,6 +1,8 @@
 // src/jobs/gastos-generales.job.ts
 // Notifica a propietarios del edificio cuando hay gastos generales recientes.
 import { query } from '../db/connection'
+import { renderTemplate, fmtMonto } from '../utils/template'
+import { NotifTemplate } from './vencimiento-pago.job'
 import { sendPushToPropietario } from '../channels/push.channel'
 
 interface GastoExtra {
@@ -20,6 +22,7 @@ interface Propietario {
 export async function runGastosGenerales(
   idEdificio: string,
   diasOffset: number,
+  tmpl?: NotifTemplate,
 ): Promise<void> {
   // Gastos creados hace >= diasOffset días (aún recientes)
   const offsetDate = new Date()
@@ -66,9 +69,10 @@ export async function runGastosGenerales(
 
       if (yaNotif.length > 0) continue
 
+      const vars = { descripcion: gasto.descripcion, monto: fmtMonto(gasto.monto_gasto) }
       const n = await sendPushToPropietario(prop.propietario_id, {
-        title: '🏢 Gasto general registrado',
-        body:  `"${gasto.descripcion}" por S/. ${gasto.monto_gasto.toFixed(2)}. Revisa tu estado de cuenta.`,
+        title: renderTemplate(tmpl?.titulo || '🏢 Gasto general registrado', vars),
+        body:  renderTemplate(tmpl?.cuerpo || '"{descripcion}" por S/. {monto}. Revisa tu estado de cuenta.', vars),
         url:   '/mis-pagos',
         tag:   `gasto-${gasto.gasto_id}-${prop.propietario_id}`,
       })

@@ -623,6 +623,8 @@ function MensajeModal({ msg, onClose, onReload }: any) {
 // ── Componente ProgramacionTab ────────────────────────────────
 function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChange, edificiosGrupo, selectedEdifNotif, onEdifChange, selBuilding, configs, loadingConfigs, savingConfig, onSave }: any) {
   const [forms, setForms] = useState<Record<string, any>>({})
+  const [editandoTexto, setEditandoTexto] = useState<string | null>(null) // idTipo del modal abierto
+  const [savingTexto, setSavingTexto] = useState(false)
   const inp: React.CSSProperties = { background:'var(--bg-elevated)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.45rem 0.7rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',outline:'none' }
 
   useEffect(() => {
@@ -630,7 +632,12 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
     const next: Record<string, any> = {}
     configs.forEach((c: any) => {
       const parsed = parseCronSimple(c.cronExpresion || '0 9 * * *')
-      next[c.idTipo] = { ...c, ...parsed }
+      next[c.idTipo] = {
+        ...c,
+        ...parsed,
+        templateTitulo: c.tipo?.templateTitulo || '',
+        templateCuerpo: c.tipo?.templateCuerpo || '',
+      }
     })
     setForms(next)
   }, [configs])
@@ -651,6 +658,52 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
     setForms(prev => ({ ...prev, [idTipo]: { ...prev[idTipo], [field]: value } }))
   }
 
+  const saveTemplate = async (idTipo: string) => {
+    const form = forms[idTipo]
+    if (!form) return
+    setSavingTemplate(true)
+    try {
+      await api.patch(`/notificacion-tipo/${idTipo}`, {
+        templateTitulo: form.templateTitulo,
+        templateCuerpo: form.templateCuerpo,
+      })
+      toast.success('Texto actualizado')
+      setEditingTemplate(null)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Error guardando texto')
+    } finally { setSavingTemplate(false) }
+  }
+
+  const insertVar = (idTipo: string, field: 'templateTitulo' | 'templateCuerpo', variable: string) => {
+    setForms(prev => ({
+      ...prev,
+      [idTipo]: { ...prev[idTipo], [field]: (prev[idTipo][field] || '') + `{${variable}}` }
+    }))
+  }
+
+  const handleSaveTexto = async (idTipo: string) => {
+    const form = forms[idTipo]
+    if (!form) return
+    setSavingTexto(true)
+    try {
+      await api.patch(`/notificacion-tipo/${idTipo}`, {
+        templateTitulo: form.templateTitulo,
+        templateCuerpo: form.templateCuerpo,
+      })
+      toast.success('Texto guardado')
+      setEditandoTexto(null)
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Error guardando texto')
+    } finally { setSavingTexto(false) }
+  }
+
+  const insertarVariable = (idTipo: string, campo: 'templateTitulo' | 'templateCuerpo', variable: string) => {
+    setForms(prev => ({
+      ...prev,
+      [idTipo]: { ...prev[idTipo], [campo]: (prev[idTipo]?.[campo] || '') + `{${variable}}` }
+    }))
+  }
+
   const handleSave = (idTipo: string) => {
     const form = forms[idTipo]
     if (!form) return
@@ -662,6 +715,16 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
   // Para admin/gestión: usa el edificio del selector principal (selBuilding)
   const idEdificio = isSupervisor ? (selectedEdifNotif || selBuilding) : selBuilding
   const sinEdificio = !idEdificio
+
+  // Muestra texto de ejemplo reemplazando variables con valores de demo
+  const renderPreview = (tmpl: string) => {
+    const demos: Record<string,string> = {
+      periodo: 'Mayo 2026', departamento: '101', saldo: '283.00',
+      descripcion: 'Limpieza cisterna', monto: '150.00',
+      servicio: 'Agua Sedapal',
+    }
+    return tmpl.replace(/\{(\w+)\}/g, (_: string, k: string) => demos[k] || `{${k}}`)
+  }
 
   return (
     <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
@@ -782,7 +845,11 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
                       </code>
                     </p>
                   )}
-                  <div style={{ marginLeft:'auto' }}>
+                  <div style={{ marginLeft:'auto',display:'flex',gap:'0.5rem' }}>
+                    <button onClick={() => setEditingTemplate(editingTemplate === config.idTipo ? null : config.idTipo)}
+                      style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--bg-elevated)',color:'var(--text-secondary)',fontWeight:500,fontSize:'0.8rem',padding:'0.5rem 0.9rem',borderRadius:'var(--radius)',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'var(--font-body)' }}>
+                      <Pencil size={13} /> Editar texto
+                    </button>
                     <button onClick={() => handleSave(config.idTipo)} disabled={!!isSaving}
                       style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:form.activo?'var(--accent)':'var(--bg-elevated)',color:form.activo?'#0f1117':'var(--text-secondary)',fontWeight:600,fontSize:'0.8rem',padding:'0.5rem 1rem',borderRadius:'var(--radius)',border:`1px solid ${form.activo?'var(--accent)':'var(--border)'}`,cursor:'pointer',fontFamily:'var(--font-body)' }}>
                       {isSaving ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
@@ -791,6 +858,83 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
                   </div>
                 </div>
               </div>
+
+              {/* Modal inline edición de texto */}
+              {editingTemplate === config.idTipo && (
+                <div style={{ background:'var(--bg-elevated)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:'var(--radius)',padding:'1.25rem',marginTop:'0.75rem' }}>
+                  <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem' }}>
+                    <h4 style={{ fontWeight:600,fontSize:'0.9rem',color:'var(--accent)',display:'flex',alignItems:'center',gap:'0.4rem' }}>
+                      <Pencil size={14} /> Texto de la notificación
+                    </h4>
+                    <button onClick={() => setEditingTemplate(null)}
+                      style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center' }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Variables disponibles */}
+                  {tipo.variablesDisponibles && JSON.parse(tipo.variablesDisponibles || '[]').length > 0 && (
+                    <div style={{ marginBottom:'1rem' }}>
+                      <p style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:'0.4rem' }}>
+                        Variables disponibles — clic para insertar en el campo activo
+                      </p>
+                      <div style={{ display:'flex',gap:'0.4rem',flexWrap:'wrap' as const }}>
+                        {JSON.parse(tipo.variablesDisponibles || '[]').map((v: string) => (
+                          <button key={v}
+                            onClick={() => {
+                              // Insertar en el último campo activo (cuerpo por defecto)
+                              insertVar(config.idTipo, 'templateCuerpo', v)
+                            }}
+                            style={{ fontSize:'0.75rem',background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',color:'var(--accent)',borderRadius:4,padding:'0.2rem 0.6rem',cursor:'pointer',fontFamily:'monospace' }}>
+                            {`{${v}}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display:'flex',flexDirection:'column' as const,gap:'0.75rem',marginBottom:'1rem' }}>
+                    <div>
+                      <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.3rem' }}>Título *</label>
+                      <input
+                        value={form.templateTitulo || tipo.templateTitulo || ''}
+                        onChange={e => update(config.idTipo, 'templateTitulo', e.target.value)}
+                        onFocus={() => {}}
+                        placeholder="ej: 💰 Pago pendiente — {periodo}"
+                        style={{ width:'100%',background:'var(--bg-surface)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)' }}
+                      />
+                      <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>
+                        Vista previa: <em>{renderPreview(form.templateTitulo || tipo.templateTitulo || '')}</em>
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize:'0.72rem',fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.3rem' }}>Cuerpo *</label>
+                      <textarea
+                        value={form.templateCuerpo || tipo.templateCuerpo || ''}
+                        onChange={e => update(config.idTipo, 'templateCuerpo', e.target.value)}
+                        rows={3}
+                        placeholder="ej: Depto {departamento}: S/. {saldo} pendiente."
+                        style={{ width:'100%',background:'var(--bg-surface)',border:'1px solid var(--border)',color:'var(--text-primary)',borderRadius:'var(--radius)',padding:'0.5rem 0.75rem',fontSize:'0.875rem',fontFamily:'var(--font-body)',resize:'vertical' as const }}
+                      />
+                      <p style={{ fontSize:'0.7rem',color:'var(--text-muted)',marginTop:'0.2rem' }}>
+                        Vista previa: <em>{renderPreview(form.templateCuerpo || tipo.templateCuerpo || '')}</em>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display:'flex',justifyContent:'flex-end',gap:'0.5rem' }}>
+                    <button onClick={() => setEditingTemplate(null)}
+                      style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',color:'var(--text-secondary)',fontWeight:500,fontSize:'0.8rem',padding:'0.45rem 0.9rem',borderRadius:'var(--radius)',cursor:'pointer',fontFamily:'var(--font-body)' }}>
+                      Cancelar
+                    </button>
+                    <button onClick={() => saveTemplate(config.idTipo)} disabled={savingTemplate}
+                      style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.8rem',padding:'0.45rem 0.9rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }}>
+                      {savingTemplate ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
+                      Guardar texto
+                    </button>
+                  </div>
+                </div>
+              )}
             )
           })}
         </>

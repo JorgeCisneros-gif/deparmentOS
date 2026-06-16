@@ -9,15 +9,18 @@ import { runRecoleccionMedicion } from './recoleccion-medicion.job'
 import { runVencimientoServicio } from './vencimiento-servicio.job'
 
 interface NotificacionConfigRow {
-  config_id:      string
-  id_edificio:    string
-  edificio_nombre: string
-  id_grupo:       string
-  tipo_codigo:    string
-  tipo_nombre:    string
-  destinatarios:  string
-  cron_expresion: string
-  dias_offset:    number
+  config_id:              string
+  id_edificio:            string
+  edificio_nombre:        string
+  id_grupo:               string
+  tipo_codigo:            string
+  tipo_nombre:            string
+  destinatarios:          string
+  template_titulo:        string | null
+  template_cuerpo:        string | null
+  variables_disponibles:  string | null
+  cron_expresion:         string
+  dias_offset:            number
 }
 
 // Lee todas las configs activas con su tipo
@@ -30,6 +33,9 @@ const SQL_CONFIGS_ACTIVAS = `
     nt.codigo       AS tipo_codigo,
     nt.nombre       AS tipo_nombre,
     nt.destinatarios,
+    nt.template_titulo,
+    nt.template_cuerpo,
+    nt.variables_disponibles,
     nc.cron_expresion,
     nc.dias_offset
   FROM notificacion_config nc
@@ -104,18 +110,22 @@ export async function runDispatcher(): Promise<void> {
   for (const config of aEjecutar) {
     console.log(`\n[Dispatcher] → ${config.tipo_codigo} | ${config.edificio_nombre}`)
     try {
+      const tmpl = {
+        titulo: config.template_titulo || undefined,
+        cuerpo: config.template_cuerpo || undefined,
+      }
       switch (config.tipo_codigo) {
         case 'vencimiento_pago':
-          await runVencimientoPago(config.id_edificio, config.dias_offset)
+          await runVencimientoPago(config.id_edificio, config.dias_offset, tmpl)
           break
         case 'gastos_generales':
-          await runGastosGenerales(config.id_edificio, config.dias_offset)
+          await runGastosGenerales(config.id_edificio, config.dias_offset, tmpl)
           break
         case 'recoleccion_medicion':
-          await runRecoleccionMedicion(config.id_edificio, config.destinatarios)
+          await runRecoleccionMedicion(config.id_edificio, config.destinatarios, tmpl)
           break
         case 'vencimiento_servicio':
-          await runVencimientoServicio(config.id_edificio, config.destinatarios)
+          await runVencimientoServicio(config.id_edificio, config.destinatarios, tmpl)
           break
         default:
           console.warn(`[Dispatcher] Código desconocido: ${config.tipo_codigo}`)

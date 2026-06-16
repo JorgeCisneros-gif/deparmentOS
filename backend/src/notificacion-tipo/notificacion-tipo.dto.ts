@@ -29,10 +29,34 @@ export class CreateNotificacionTipoDto {
   @ApiPropertyOptional({ example: 5 })
   @IsOptional() @IsInt() @Min(0) @Max(100)
   orden?: number;
+
+  @ApiPropertyOptional({ example: '💰 Pago pendiente — {periodo}' })
+  @IsOptional() @IsString()
+  templateTitulo?: string;
+
+  @ApiPropertyOptional({ example: 'Depto {departamento}: S/. {saldo} pendiente.' })
+  @IsOptional() @IsString()
+  templateCuerpo?: string;
+
+  @ApiPropertyOptional({ example: '["periodo","departamento","saldo"]' })
+  @IsOptional() @IsString()
+  variablesDisponibles?: string;
 }
 
 export class UpdateNotificacionTipoDto extends PartialType(CreateNotificacionTipoDto) {
   @ApiPropertyOptional()
   @IsOptional() @IsBoolean()
   activo?: boolean;
+
+  @ApiPropertyOptional({ example: '💰 Pago pendiente — {periodo}' })
+  @IsOptional() @IsString()
+  templateTitulo?: string;
+
+  @ApiPropertyOptional({ example: 'Depto {departamento}: S/. {saldo} pendiente.' })
+  @IsOptional() @IsString()
+  templateCuerpo?: string;
+
+  @ApiPropertyOptional({ example: '["periodo","departamento","saldo"]' })
+  @IsOptional() @IsString()
+  variablesDisponibles?: string;
 }
