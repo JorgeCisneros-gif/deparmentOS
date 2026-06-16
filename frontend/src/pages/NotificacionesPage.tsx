@@ -661,17 +661,17 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
   const saveTemplate = async (idTipo: string) => {
     const form = forms[idTipo]
     if (!form) return
-    setSavingTemplate(true)
+    setSavingTexto(true)
     try {
       await api.patch(`/notificacion-tipo/${idTipo}`, {
         templateTitulo: form.templateTitulo,
         templateCuerpo: form.templateCuerpo,
       })
       toast.success('Texto actualizado')
-      setEditingTemplate(null)
+      setEditandoTexto(null)
     } catch (e: any) {
       toast.error(e?.response?.data?.message || 'Error guardando texto')
-    } finally { setSavingTemplate(false) }
+    } finally { setSavingTexto(false) }
   }
 
   const insertVar = (idTipo: string, field: 'templateTitulo' | 'templateCuerpo', variable: string) => {
@@ -780,8 +780,8 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
             const color = esDestinatarioProp ? '#4a9eff' : '#a78bfa'
 
             return (
-              <>
-              <div key={config.idTipo} style={{ background:'var(--bg-surface)',border:`1px solid ${form.activo ? color + '40' : 'var(--border)'}`,borderRadius:'var(--radius-lg)',padding:'1.25rem',transition:'border-color 0.2s' }}>
+              <React.Fragment key={config.idTipo}>
+              <div style={{ background:'var(--bg-surface)',border:`1px solid ${form.activo ? color + '40' : 'var(--border)'}`,borderRadius:'var(--radius-lg)',padding:'1.25rem',transition:'border-color 0.2s' }}>
                 <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'1rem' }}>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex',alignItems:'center',gap:'0.6rem',marginBottom:'0.25rem',flexWrap:'wrap' as const }}>
@@ -847,7 +847,7 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
                     </p>
                   )}
                   <div style={{ marginLeft:'auto',display:'flex',gap:'0.5rem' }}>
-                    <button onClick={() => setEditingTemplate(editingTemplate === config.idTipo ? null : config.idTipo)}
+                    <button onClick={() => setEditandoTexto(editandoTexto === config.idTipo ? null : config.idTipo)}
                       style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--bg-elevated)',color:'var(--text-secondary)',fontWeight:500,fontSize:'0.8rem',padding:'0.5rem 0.9rem',borderRadius:'var(--radius)',border:'1px solid var(--border)',cursor:'pointer',fontFamily:'var(--font-body)' }}>
                       <Pencil size={13} /> Editar texto
                     </button>
@@ -861,13 +861,13 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
               </div>
 
               {/* Modal inline edición de texto */}
-              {editingTemplate === config.idTipo && (
+              {editandoTexto === config.idTipo && (
                 <div style={{ background:'var(--bg-elevated)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:'var(--radius)',padding:'1.25rem',marginTop:'0.75rem' }}>
                   <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem' }}>
                     <h4 style={{ fontWeight:600,fontSize:'0.9rem',color:'var(--accent)',display:'flex',alignItems:'center',gap:'0.4rem' }}>
                       <Pencil size={14} /> Texto de la notificación
                     </h4>
-                    <button onClick={() => setEditingTemplate(null)}
+                    <button onClick={() => setEditandoTexto(null)}
                       style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',display:'flex',alignItems:'center' }}>
                       <X size={16} />
                     </button>
@@ -884,7 +884,7 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
                           <button key={v}
                             onClick={() => {
                               // Insertar en el último campo activo (cuerpo por defecto)
-                              insertVar(config.idTipo, 'templateCuerpo', v)
+                              insertarVariable(config.idTipo, 'templateCuerpo', v)
                             }}
                             style={{ fontSize:'0.75rem',background:'rgba(245,166,35,0.1)',border:'1px solid rgba(245,166,35,0.3)',color:'var(--accent)',borderRadius:4,padding:'0.2rem 0.6rem',cursor:'pointer',fontFamily:'monospace' }}>
                             {`{${v}}`}
@@ -924,21 +924,21 @@ function ProgramacionTab({ isSupervisor, grupos, selectedGrupoNotif, onGrupoChan
                   </div>
 
                   <div style={{ display:'flex',justifyContent:'flex-end',gap:'0.5rem' }}>
-                    <button onClick={() => setEditingTemplate(null)}
+                    <button onClick={() => setEditandoTexto(null)}
                       style={{ background:'var(--bg-surface)',border:'1px solid var(--border)',color:'var(--text-secondary)',fontWeight:500,fontSize:'0.8rem',padding:'0.45rem 0.9rem',borderRadius:'var(--radius)',cursor:'pointer',fontFamily:'var(--font-body)' }}>
                       Cancelar
                     </button>
-                    <button onClick={() => saveTemplate(config.idTipo)} disabled={savingTemplate}
+                    <button onClick={() => handleSaveTexto(config.idTipo)} disabled={savingTexto}
                       style={{ display:'flex',alignItems:'center',gap:'0.4rem',background:'var(--accent)',color:'#0f1117',fontWeight:600,fontSize:'0.8rem',padding:'0.45rem 0.9rem',borderRadius:'var(--radius)',border:'none',cursor:'pointer',fontFamily:'var(--font-body)' }}>
-                      {savingTemplate ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
+                      {savingTexto ? <Loader2 size={13} style={{ animation:'spin 0.8s linear infinite' }} /> : <Save size={13} />}
                       Guardar texto
                     </button>
                   </div>
                 </div>
               )}
+            </React.Fragment>
             )
           })}
-        </>
       )}
     </div>
   )
