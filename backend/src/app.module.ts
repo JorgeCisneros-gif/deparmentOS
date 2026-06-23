@@ -25,6 +25,8 @@ import { MailModule } from './mail/mail.module';
 import { NotificacionConfigModule } from './notificacion-config/notificacion-config.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { NotificacionTipoModule } from './notificacion-tipo/notificacion-tipo.module';
+import { StorageGatewayModule } from './storage-gateway/storage-gateway.module';
+
 @Module({
   imports: [
     TypeOrmModule.forRoot({
@@ -62,6 +64,7 @@ import { NotificacionTipoModule } from './notificacion-tipo/notificacion-tipo.mo
     NotificacionConfigModule,
     NotificacionTipoModule,
     SchedulerModule,
+    StorageGatewayModule, // ← integración con suite-os-storage
   ],
 })
 export class AppModule {}

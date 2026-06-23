@@ -44,7 +44,6 @@ export class ReadingsController {
     return this.svc.getConsumptionHistory(deptId, req.user.role === UserRole.SUPERVISOR);
   }
 
-  // Devuelve el filename de una imagen de medidor para construir la URL en el frontend
   @Get('meter-image/:id')
   @ApiOperation({ summary: 'Obtener filename de imagen de medidor por su ID' })
   getMeterImage(@Param('id') id: string) {
@@ -69,7 +68,12 @@ export class ReadingsController {
   @Post('ocr')
   @Roles(UserRole.GESTION)
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: '📸 Subir foto del medidor → OCR automático' })
+  @ApiOperation({
+    summary: '📸 Subir foto del medidor → OCR automático',
+    description:
+      'Procesa OCR pero NO persiste la imagen todavía. Devuelve un sessionId ' +
+      'temporal (30 min) que debe usarse en POST /readings/confirm-ocr.',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -77,15 +81,15 @@ export class ReadingsController {
       properties: {
         departamentoId: { type: 'string', format: 'uuid' },
         reciboId:       { type: 'string', format: 'uuid' },
-        image:          { type: 'string', format: 'binary', description: 'Imagen procesada para OCR' },
-        original:       { type: 'string', format: 'binary', description: 'Imagen original para guardar (opcional)' },
+        image:          { type: 'string', format: 'binary' },
+        original:       { type: 'string', format: 'binary' },
       },
     },
   })
   async uploadOcr(@Request() req) {
     const fields: Record<string, string> = {};
-    let fileBuffer:    Buffer | null = null;   // procesada → OCR
-    let originalBuffer: Buffer | null = null;  // original → guardar en BD
+    let fileBuffer:    Buffer | null = null;
+    let originalBuffer: Buffer | null = null;
     let originalName = 'medidor.jpg';
     let mimeType     = 'image/jpeg';
     let fileSizeKb   = 0;
@@ -98,7 +102,6 @@ export class ReadingsController {
           if (part.fieldname === 'original') {
             originalBuffer = buf;
           } else {
-            // campo 'image' o cualquier otro archivo
             fileBuffer   = buf;
             originalName = part.filename || 'medidor.jpg';
             mimeType     = part.mimetype || 'image/jpeg';
@@ -128,19 +131,49 @@ export class ReadingsController {
       fileBuffer,
       originalName,
       fileSizeKb,
+      mimeType,
       departamentoId,
       reciboId,
       req.user.id,
-      originalBuffer ?? undefined,   // original para guardar (puede ser undefined)
+      originalBuffer ?? undefined,
     );
   }
 
   @Post('confirm-ocr')
   @Roles(UserRole.GESTION)
-  @ApiOperation({ summary: '✅ Confirmar lectura OCR y guardar medición' })
-  confirmOcr(@Body() body: { meterImageId: string } & ConfirmOcrReadingDto, @Request() req) {
-    const { meterImageId, ...dto } = body;
-    return this.svc.confirmOcr(meterImageId, dto, req.user.id);
+  @ApiOperation({
+    summary: '✅ Confirmar lectura OCR y guardar medición',
+    description:
+      'Persiste la imagen y crea la medición. Soporta 3 modos:\n' +
+      '1. sessionId (flujo OCR nuevo)\n' +
+      '2. meterImageId (flujo OCR legacy)\n' +
+      '3. ninguno (lectura manual sin foto)',
+  })
+  confirmOcr(@Body() body: any, @Request() req) {
+    // Manejo defensivo del body — Fastify a veces lo entrega vacío
+    // si Content-Type no está bien o si hay un problema en el parser.
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException(
+        'El cuerpo de la petición es requerido y debe ser JSON. ' +
+        'Verifica el header Content-Type: application/json.'
+      );
+    }
+
+    const { sessionId, meterImageId, ...dto } = body;
+
+    // Validación mínima de los campos del DTO
+    if (!dto.idRecibo || !dto.idDepartamento) {
+      throw new BadRequestException('idRecibo e idDepartamento son requeridos');
+    }
+    if (dto.lecturaFinal === undefined || dto.lecturaAnterior === undefined) {
+      throw new BadRequestException('lecturaFinal y lecturaAnterior son requeridos');
+    }
+
+    return this.svc.confirmOcr(
+      { sessionId, meterImageId },
+      dto as ConfirmOcrReadingDto,
+      req.user.id,
+    );
   }
 
   @Post('housekeeping')
