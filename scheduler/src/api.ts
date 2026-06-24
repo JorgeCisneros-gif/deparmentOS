@@ -6,6 +6,7 @@ import { runVencimientoPago } from './jobs/vencimiento-pago.job'
 import { runGastosGenerales } from './jobs/gastos-generales.job'
 import { runRecoleccionMedicion } from './jobs/recoleccion-medicion.job'
 import { runVencimientoServicio } from './jobs/vencimiento-servicio.job'
+import { runMeterImagesHousekeeping } from './jobs/meter-images-housekeeping.job'
 import { sendPushToPropietario, sendPushToEdificioRoles } from './channels/push.channel'
 import { query } from './db/connection'
 
@@ -69,26 +70,41 @@ app.get('/status', authGuard, async (_req, res) => {
 })
 
 // ── Dispatcher manual ─────────────────────────────────────────
-let jobRunning = false
+let dispatcherRunning = false
 
 app.post('/run-now', authGuard, async (_req, res) => {
-  if (jobRunning) {
+  if (dispatcherRunning) {
     res.status(409).json({ error: 'Job en ejecución, espera que termine' }); return
   }
   res.json({ message: 'Dispatcher iniciado en background', timestamp: new Date().toISOString() })
-  jobRunning = true
+  dispatcherRunning = true
   console.log(`[API] Dispatcher disparado manualmente`)
   try { await runDispatcher() }
   catch (err: any) { console.error('[API] Error dispatcher:', err?.message) }
-  finally { jobRunning = false }
+  finally { dispatcherRunning = false }
+})
+
+// ── Meter Images Housekeeping manual ──────────────────────────
+let meterImagesHkRunning = false
+
+app.post('/run/meter-images-housekeeping', authGuard, async (_req, res) => {
+  if (meterImagesHkRunning) {
+    res.status(409).json({ error: 'Housekeeping en ejecución, espera que termine' }); return
+  }
+  meterImagesHkRunning = true
+  console.log(`[API] Meter Images Housekeeping disparado manualmente`)
+  try {
+    const result = await runMeterImagesHousekeeping()
+    res.json({ ok: true, ...result, timestamp: new Date().toISOString() })
+  } catch (err: any) {
+    console.error('[API] Error meter images housekeeping:', err?.message)
+    res.status(500).json({ error: err?.message })
+  } finally {
+    meterImagesHkRunning = false
+  }
 })
 
 // ── TEST: enviar notificación de prueba por tipo ──────────────
-// POST /test/vencimiento-pago   { idEdificio, diasOffset? }
-// POST /test/gastos-generales   { idEdificio, diasOffset? }
-// POST /test/recoleccion        { idEdificio, destinatarios? }
-// POST /test/vencimiento-svc    { idEdificio, destinatarios? }
-// POST /test/push-directo       { userId, title, body, url? }
 
 app.post('/test/vencimiento-pago', authGuard, async (req, res) => {
   const { idEdificio, diasOffset = 0 } = req.body
@@ -130,8 +146,6 @@ app.post('/test/vencimiento-svc', authGuard, async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err?.message }) }
 })
 
-// POST /test/push-directo — envía push inmediato a un usuario o propietario
-// Body: { userId?, propietarioId?, title, body, url? }
 app.post('/test/push-directo', authGuard, async (req, res) => {
   const { userId, propietarioId, title, body, url } = req.body
   if (!title || !body) { res.status(400).json({ error: 'title y body requeridos' }); return }
@@ -177,6 +191,7 @@ export function startApi(): void {
     console.log(`[API]   GET  /status`)
     console.log(`[API]   GET  /logs`)
     console.log(`[API]   POST /run-now`)
+    console.log(`[API]   POST /run/meter-images-housekeeping`)
     console.log(`[API]   POST /test/vencimiento-pago  { idEdificio, diasOffset? }`)
     console.log(`[API]   POST /test/gastos-generales  { idEdificio, diasOffset? }`)
     console.log(`[API]   POST /test/recoleccion        { idEdificio, destinatarios? }`)

@@ -206,8 +206,6 @@ export class ReadingsService {
    *   2. DESPUÉS de commit, intenta subir al gateway (best effort)
    *   3. Si gateway falla, la medición queda guardada con foto local.
    *      El housekeeping nocturno reintentará el upload.
-   *
-   * Nunca falla la creación de la medición por culpa del gateway.
    */
   private async confirmFromSession(
     sessionId: string,
@@ -230,7 +228,6 @@ export class ReadingsService {
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-    // ─── Paso 1: Persistir local en transacción atómica ───────
     let createdImageId: string;
     let createdReading: Reading;
 
@@ -285,10 +282,6 @@ export class ReadingsService {
       throw err;
     }
 
-    // ─── Paso 2: Best-effort upload al gateway (FUERA de la transacción) ───
-    //
-    // Si esto falla, la medición YA está guardada con foto local.
-    // El housekeeping nocturno reintentará.
     this.tryUploadToGateway(createdImageId, session.buffer, session.mimeType)
       .catch((err) => {
         this.logger.warn(
@@ -300,7 +293,6 @@ export class ReadingsService {
     return createdReading;
   }
 
-  /** Legacy. */
   private async confirmFromImage(
     meterImageId: string,
     dto: ConfirmOcrReadingDto,
@@ -324,7 +316,6 @@ export class ReadingsService {
     );
   }
 
-  /** Lectura manual sin foto. */
   private async confirmManualReading(dto: ConfirmOcrReadingDto): Promise<Reading> {
     this.logger.log(`Lectura manual (sin foto) para depto ${dto.idDepartamento}`);
 
@@ -343,13 +334,6 @@ export class ReadingsService {
 
   // ── Upload al gateway (privado) ──────────────────────────────
 
-  /**
-   * Intenta subir una foto al gateway.
-   * Resuelve el orgId (idGrupo) y el contexto (tipo de servicio, depto, período)
-   * para construir un nombre de archivo descriptivo.
-   *
-   * No lanza excepciones — siempre actualiza la fila para reflejar el resultado.
-   */
   private async tryUploadToGateway(
     meterImageId: string,
     fileBuffer: Buffer,
@@ -362,7 +346,6 @@ export class ReadingsService {
 
     let img: MeterImage | null = null;
     try {
-      // 1. Cargar contexto completo de la foto
       img = await this.imageRepo.findOne({ where: { id: meterImageId } });
       if (!img) return;
 
@@ -375,14 +358,17 @@ export class ReadingsService {
         return;
       }
 
-      // 2. Construir nombre descriptivo: {servicio}_{depto}_{mes-anio}
-      // Ej: agua_201_06-2026.jpg
       const ext = path.extname(img.filename) || '.jpg';
       const customFileName =
         `${ctx.tipoServicio}_${ctx.nrDepartamento}_` +
         `${String(ctx.periodoMes).padStart(2, '0')}-${ctx.periodoAnio}`;
 
-      // 3. Subir al gateway
+      // El gateway NO acepta '/' en subFolder. Usamos una sola subcarpeta
+      // capitalizada por tipo de servicio (ej: "Lecturas-Agua", "Lecturas-Luz").
+      const tipoCapitalizado =
+        ctx.tipoServicio.charAt(0).toUpperCase() + ctx.tipoServicio.slice(1);
+      const subFolder = `Lecturas-${tipoCapitalizado}`;
+
       const result = await this.storageGateway.uploadFile({
         orgId: ctx.idGrupo,
         entityType: 'meter_reading',
@@ -390,13 +376,10 @@ export class ReadingsService {
         fileBuffer,
         fileName: `${customFileName}${ext}`,
         mimeType,
-        subFolder: `Lecturas-${ctx.tipoServicio.charAt(0).toUpperCase() + ctx.tipoServicio.slice(1)}`,
+        subFolder,
         customFileName,
       });
 
-      // 4. Solo marcamos como 'google_drive' si efectivamente quedó en Drive.
-      // Si el gateway lo guardó temporalmente (sin Drive configurado), mantenemos 'local'
-      // y NO seteamos local_purgeable_at — no queremos borrar nuestra copia.
       const wentToDrive = result.storageType === 'google_drive' &&
                           result.status === 'stored_external';
 
@@ -419,7 +402,6 @@ export class ReadingsService {
         `(${result.storageType}/${result.status}, fileId=${result.fileId})`,
       );
     } catch (err) {
-      // Registrar el error en la fila para que el housekeeping lo reintente
       try {
         await this.imageRepo
           .createQueryBuilder()
@@ -439,14 +421,6 @@ export class ReadingsService {
     }
   }
 
-  /**
-   * Resuelve el contexto necesario para construir el nombre del archivo y
-   * encontrar el orgId del grupo dueño del edificio.
-   *
-   *   meter_image
-   *     → departamento → edificio → grupo
-   *     → recibo       → servicio
-   */
   private async resolveMeterImageContext(meterImageId: string): Promise<{
     idGrupo: string;
     nrDepartamento: string;
@@ -529,13 +503,6 @@ export class ReadingsService {
     };
   }
 
-  // ── Lectura de una imagen específica (para el frontend) ──────
-
-  /**
-   * Devuelve los datos necesarios para que el frontend muestre la imagen.
-   * Si está en Drive, devuelve externalUrl directamente.
-   * Si está local, devuelve filename para construir la URL local.
-   */
   async getMeterImageById(id: string): Promise<{
     id: string;
     filename: string;
@@ -546,7 +513,6 @@ export class ReadingsService {
     const img = await this.imageRepo.findOne({ where: { id } });
     if (!img) return null;
 
-    // Si está marcado como Drive pero no hay URL, intentar regenerarla on-demand
     let externalUrl = img.externalUrl;
     if (img.storageProvider === 'google_drive' && !externalUrl && img.gatewayFileId) {
       try {
@@ -572,19 +538,9 @@ export class ReadingsService {
   }
 
   // ════════════════════════════════════════════════════════════════
-  //  HOUSEKEEPING (lo ejecuta el scheduler diariamente)
+  //  HOUSEKEEPING
   // ════════════════════════════════════════════════════════════════
 
-  /**
-   * Job completo del housekeeping de fotos.
-   *
-   * Tres pasos secuenciales:
-   *  1. Reintentar uploads fallidos al gateway
-   *  2. Borrar archivos locales que ya están en Drive (con gracia de 7 días)
-   *  3. Expirar fotos locales antiguas (legacy, expires_at < today)
-   *
-   * Es idempotente y seguro de ejecutar múltiples veces.
-   */
   async runHousekeeping(): Promise<{
     retried:   number;
     retriedOk: number;
@@ -593,7 +549,7 @@ export class ReadingsService {
   }> {
     this.logger.log('🧹 Iniciando housekeeping de meter_images');
 
-    const retried       = await this.retryFailedUploads();
+    const retried       = await this.retryPendingUploads();
     const purgedLocal   = await this.purgeLocalAfterDriveSuccess();
     const expiredDeleted = await this.deleteExpiredLocal();
 
@@ -615,15 +571,23 @@ export class ReadingsService {
   }
 
   /**
-   * Paso 1: reintentar uploads fallidos al gateway.
+   * Reintenta uploads pendientes al gateway.
    *
-   * Selecciona fotos con:
-   *   - storage_provider = 'local'
-   *   - gateway_last_error IS NOT NULL  (sí intentó antes y falló)
-   *   - gateway_attempts < MAX_GATEWAY_ATTEMPTS
-   *   - filepath sigue existiendo en disco
+   * Selecciona TODAS las fotos locales que aún no están en Drive y que tienen
+   * archivo válido en disco. Cubre 3 casos:
+   *
+   *   Caso A — Foto nueva donde el upload inicial falló:
+   *     storage_provider='local', gateway_attempts>=1, gateway_last_error IS NOT NULL
+   *
+   *   Caso B — Foto vieja (legacy) que nunca se intentó subir:
+   *     storage_provider='local', gateway_attempts=0, gateway_last_error IS NULL
+   *
+   *   Caso C — Foto que se reseteó manualmente para retry:
+   *     storage_provider='local', gateway_attempts=0
+   *
+   * En todos los casos respeta MAX_GATEWAY_ATTEMPTS para no entrar en loops.
    */
-  private async retryFailedUploads(): Promise<{ attempted: number; success: number }> {
+  private async retryPendingUploads(): Promise<{ attempted: number; success: number }> {
     if (!this.storageGateway.isEnabled()) {
       return { attempted: 0, success: 0 };
     }
@@ -631,23 +595,31 @@ export class ReadingsService {
     const candidates = await this.imageRepo
       .createQueryBuilder('mi')
       .where('mi.storage_provider = :sp', { sp: 'local' })
-      .andWhere('mi.gateway_last_error IS NOT NULL')
       .andWhere('mi.gateway_attempts < :max', { max: MAX_GATEWAY_ATTEMPTS })
       .andWhere('mi.filepath IS NOT NULL')
-      .orderBy('mi.created_at', 'ASC')
-      .limit(50) // máximo por ejecución para no saturar
+      // tiene id_recibo: sin recibo no podemos resolver org/servicio
+      .andWhere('mi.id_recibo IS NOT NULL')
+      .orderBy('mi.gateway_attempts', 'ASC') // primero las que tienen menos intentos
+      .addOrderBy('mi.created_at', 'ASC')
+      .limit(50)
       .getMany();
 
     if (candidates.length === 0) {
+      this.logger.log('No hay fotos pendientes de subir al gateway.');
       return { attempted: 0, success: 0 };
     }
 
-    this.logger.log(`Reintentando upload de ${candidates.length} fotos.`);
+    this.logger.log(
+      `Encontradas ${candidates.length} fotos pendientes de subir al gateway.`,
+    );
 
     let success = 0;
     for (const img of candidates) {
       if (!img.filepath || !fs.existsSync(img.filepath)) {
-        // Archivo perdido: marcamos como definitivamente fallido
+        this.logger.warn(
+          `Archivo local no encontrado para ${img.id} (esperado en ${img.filepath}). ` +
+          `Marcando como definitivamente fallido.`,
+        );
         await this.imageRepo.update(img.id, {
           gatewayLastError: 'Archivo local no encontrado en disco',
           gatewayAttempts:  MAX_GATEWAY_ATTEMPTS,
@@ -662,7 +634,6 @@ export class ReadingsService {
 
         await this.tryUploadToGateway(img.id, buffer, mimeType);
 
-        // Verificamos si esta vez tuvo éxito
         const updated = await this.imageRepo.findOne({ where: { id: img.id } });
         if (updated?.storageProvider === 'google_drive') {
           success++;
@@ -677,11 +648,8 @@ export class ReadingsService {
   }
 
   /**
-   * Paso 2: borrar archivos locales que ya están confirmados en Drive,
-   * pasada la gracia de 7 días.
-   *
-   * Es un proceso conservador: solo borra el archivo del disco.
-   * Mantiene la fila en BD con storage_provider='google_drive' y filepath=NULL.
+   * Borra archivos locales que ya están confirmados en Drive
+   * (pasada la gracia de 7 días).
    */
   private async purgeLocalAfterDriveSuccess(): Promise<number> {
     const now = new Date();
@@ -717,10 +685,7 @@ export class ReadingsService {
   }
 
   /**
-   * Paso 3: expirar fotos locales antiguas (NO afecta las que están en Drive).
-   *
-   * Solo borra fotos con storage_provider='local' y expires_at < today.
-   * Las fotos en Drive nunca expiran (las maneja el cliente).
+   * Expira fotos locales viejas (NO afecta las que están en Drive).
    */
   private async deleteExpiredLocal(): Promise<number> {
     const today = new Date().toISOString().split('T')[0];

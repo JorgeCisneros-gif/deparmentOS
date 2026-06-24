@@ -8,17 +8,33 @@ import { ReadingsService } from './readings.service';
 import { CreateReadingDto, UpdateReadingDto, ConfirmOcrReadingDto } from './readings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { SchedulerTokenGuard } from '../auth/guards/scheduler-token.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user.entity';
 
+/**
+ * Endpoints del módulo de readings (mediciones).
+ *
+ * Convención de auth en este controller:
+ *   - Endpoints HUMANOS (UI/app): JwtAuthGuard + RolesGuard
+ *   - Endpoints INTERNOS (scheduler): SchedulerTokenGuard
+ *
+ * Los guards se aplican a NIVEL DE METHOD, no a nivel de class, porque
+ * el endpoint `housekeeping` es disparado por el servicio scheduler
+ * externo y no tiene JWT.
+ */
 @ApiTags('Readings')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('readings')
 export class ReadingsController {
   constructor(private readonly svc: ReadingsService) {}
 
+  // ════════════════════════════════════════════════════════════
+  //  ENDPOINTS HUMANOS (JWT)
+  // ════════════════════════════════════════════════════════════
+
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Registrar medición manual' })
   create(@Body() dto: CreateReadingDto) {
@@ -26,6 +42,7 @@ export class ReadingsController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Listar mediciones' })
   @ApiQuery({ name: 'receiptId', required: false })
   @ApiQuery({ name: 'deptId', required: false })
@@ -33,9 +50,8 @@ export class ReadingsController {
     return this.svc.findAll(receiptId, deptId);
   }
 
-  // ── IMPORTANTE: rutas estáticas ANTES de /:id ──────────────
-
   @Get('history/:deptId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Historial de consumo de agua de un departamento' })
   async getHistory(@Param('deptId') deptId: string, @Request() req) {
     if (req.user.role === UserRole.PROPIETARIO && req.user.idDepartamento !== deptId) {
@@ -45,18 +61,21 @@ export class ReadingsController {
   }
 
   @Get('meter-image/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Obtener filename de imagen de medidor por su ID' })
   getMeterImage(@Param('id') id: string) {
     return this.svc.getMeterImageById(id);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Ver medición' })
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Corregir medición' })
   update(@Param('id') id: string, @Body() dto: UpdateReadingDto) {
@@ -66,6 +85,7 @@ export class ReadingsController {
   // ── OCR ───────────────────────────────────────────────────
 
   @Post('ocr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.GESTION)
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
@@ -140,28 +160,20 @@ export class ReadingsController {
   }
 
   @Post('confirm-ocr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.GESTION)
   @ApiOperation({
     summary: '✅ Confirmar lectura OCR y guardar medición',
-    description:
-      'Persiste la imagen y crea la medición. Soporta 3 modos:\n' +
-      '1. sessionId (flujo OCR nuevo)\n' +
-      '2. meterImageId (flujo OCR legacy)\n' +
-      '3. ninguno (lectura manual sin foto)',
   })
   confirmOcr(@Body() body: any, @Request() req) {
-    // Manejo defensivo del body — Fastify a veces lo entrega vacío
-    // si Content-Type no está bien o si hay un problema en el parser.
     if (!body || typeof body !== 'object') {
       throw new BadRequestException(
-        'El cuerpo de la petición es requerido y debe ser JSON. ' +
-        'Verifica el header Content-Type: application/json.'
+        'El cuerpo de la petición es requerido y debe ser JSON.'
       );
     }
 
     const { sessionId, meterImageId, ...dto } = body;
 
-    // Validación mínima de los campos del DTO
     if (!dto.idRecibo || !dto.idDepartamento) {
       throw new BadRequestException('idRecibo e idDepartamento son requeridos');
     }
@@ -176,9 +188,23 @@ export class ReadingsController {
     );
   }
 
+  // ════════════════════════════════════════════════════════════
+  //  ENDPOINTS INTERNOS (Token del scheduler)
+  // ════════════════════════════════════════════════════════════
+
   @Post('housekeeping')
-  @Roles(UserRole.GESTION)
-  @ApiOperation({ summary: 'Eliminar imágenes de medidores vencidas' })
+  @UseGuards(SchedulerTokenGuard)
+  @ApiOperation({
+    summary: '🧹 Housekeeping de fotos de medidores [Solo scheduler]',
+    description:
+      'Endpoint interno disparado por el servicio scheduler.\n\n' +
+      'Realiza:\n' +
+      '1. Reintenta uploads pendientes al Storage Gateway\n' +
+      '2. Borra archivos locales que ya están confirmados en Drive\n' +
+      '3. Expira fotos locales viejas (legacy)\n\n' +
+      'Autenticación: header `Authorization: Bearer <SCHEDULER_API_TOKEN>` ' +
+      'o `x-scheduler-token: <SCHEDULER_API_TOKEN>`.',
+  })
   housekeeping() {
     return this.svc.runHousekeeping();
   }
