@@ -390,7 +390,7 @@ export class ReadingsService {
         fileBuffer,
         fileName: `${customFileName}${ext}`,
         mimeType,
-        subFolder: `Lecturas/${ctx.tipoServicio}`,
+        subFolder: `Lecturas-${ctx.tipoServicio.charAt(0).toUpperCase() + ctx.tipoServicio.slice(1)}`,
         customFileName,
       });
 
