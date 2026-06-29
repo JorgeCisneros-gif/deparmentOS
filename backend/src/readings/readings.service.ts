@@ -480,14 +480,17 @@ export class ReadingsService {
         { desdeAnio, desdeMes },
       )
       .select([
-        'rec.periodoAnio    AS anio',
-        'rec.periodoMes     AS mes',
-        'r.lecturaAnterior  AS lectura_anterior',
-        'r.lecturaActual    AS lectura_actual',
-        'r.m3Consumido      AS m3_consumido',
-        'r.montoCalculado   AS monto_calculado',
-        'rec.precioM3       AS precio_m3',
-        'mi.filename        AS "imagenFilename"',
+        'rec.periodoAnio        AS anio',
+        'rec.periodoMes         AS mes',
+        'r.lecturaAnterior      AS lectura_anterior',
+        'r.lecturaActual        AS lectura_actual',
+        'r.m3Consumido          AS m3_consumido',
+        'r.montoCalculado       AS monto_calculado',
+        'rec.precioM3           AS precio_m3',
+        'mi.id                  AS "meterImageId"',
+        'mi.filename            AS "imagenFilename"',
+        'mi.storage_provider    AS "storageProvider"',
+        'mi.external_url        AS "imagenExternalUrl"',
       ])
       .orderBy('rec.periodoAnio', 'DESC')
       .addOrderBy('rec.periodoMes', 'DESC')

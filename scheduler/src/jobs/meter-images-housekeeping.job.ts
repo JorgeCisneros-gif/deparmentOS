@@ -46,7 +46,7 @@ export async function runMeterImagesHousekeeping(): Promise<HousekeepingResponse
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type':  'application/json',
+      
         'Authorization': `Bearer ${token}`,
       },
       signal: controller.signal,

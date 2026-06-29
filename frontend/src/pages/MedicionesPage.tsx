@@ -5,21 +5,25 @@ import { useTz } from '../store/timezone.store'
 import toast from 'react-hot-toast'
 import {
   Droplets, Loader2,
-  RefreshCw, ZoomIn, X, TrendingUp, TrendingDown, Minus,
+  RefreshCw, ZoomIn, X, TrendingUp, TrendingDown, Minus, Cloud,
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
 
 interface Department { id: string; nrDepartamento: string }
 
 interface Medicion {
-  anio:             number
-  mes:              number
-  lectura_anterior: number
-  lectura_actual:   number
-  m3_consumido:     number
-  monto_calculado:  number
-  precio_m3:        number
-  imagenFilename?:  string   // ← viene del backend en el historial
+  anio:               number
+  mes:                number
+  lectura_anterior:   number
+  lectura_actual:     number
+  m3_consumido:       number
+  monto_calculado:    number
+  precio_m3:          number
+  // Campos relacionados a la imagen del medidor — vienen del JOIN con meter_images
+  meterImageId?:      string
+  imagenFilename?:    string
+  storageProvider?:   'local' | 'google_drive'
+  imagenExternalUrl?: string | null
 }
 
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -33,6 +37,25 @@ export default function MedicionesPage() {
   const [loading, setLoading]         = useState(false)
   const { fmt } = useTz()
   const [zoomImg, setZoomImg]         = useState<string | null>(null)
+
+  // Base URL del backend para construir URLs locales (sin /api/v1)
+  const apiBase = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || ''
+
+  /**
+   * Decide la URL de la imagen según el storage provider:
+   *  - google_drive + externalUrl → URL directa al Drive
+   *  - filename local             → URL al servidor (legacy/fallback)
+   *  - sin nada                   → null
+   */
+  const resolveImageUrl = (m: Medicion): string | null => {
+    if (m.storageProvider === 'google_drive' && m.imagenExternalUrl) {
+      return m.imagenExternalUrl
+    }
+    if (m.imagenFilename) {
+      return `${apiBase}/uploads/meters/${m.imagenFilename}`
+    }
+    return null
+  }
 
   useEffect(() => {
     if (!selBuilding) return
@@ -147,8 +170,10 @@ export default function MedicionesPage() {
                 const la     = parseFloat(String(m.lectura_anterior || 0))
                 const lact   = parseFloat(String(m.lectura_actual || 0))
                 const barPct = maxM3 > 0 ? (m3 / maxM3) * 100 : 0
-                // URL de imagen directo desde el campo del historial
-                const imgUrl = m.imagenFilename ? `/uploads/meters/${m.imagenFilename}` : null
+
+                // Decidir URL de imagen según storage_provider (local vs Drive)
+                const imgUrl    = resolveImageUrl(m)
+                const isInDrive = m.storageProvider === 'google_drive'
 
                 return (
                   <tr key={i} style={{ ...(i%2!==0?{background:'rgba(255,255,255,0.02)'}:{}) }}>
@@ -191,18 +216,33 @@ export default function MedicionesPage() {
                       {trend === null    && <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>}
                     </td>
 
-                    {/* Imagen — directo desde imagenFilename del historial, sin llamada extra */}
+                    {/* Imagen — usa externalUrl (Drive) o filename (local) */}
                     <td style={s.td}>
                       {imgUrl ? (
                         <button onClick={() => setZoomImg(imgUrl)}
-                          style={{ position:'relative',width:44,height:44,borderRadius:6,overflow:'hidden',border:'1px solid var(--border)',cursor:'pointer',background:'var(--bg-elevated)',display:'flex',alignItems:'center',justifyContent:'center',padding:0 }}>
-                          <img src={imgUrl} alt="medidor" style={{ width:'100%',height:'100%',objectFit:'cover' }}
+                          style={{ position:'relative',width:44,height:44,borderRadius:6,overflow:'hidden',border:'1px solid var(--border)',cursor:'pointer',background:'var(--bg-elevated)',display:'flex',alignItems:'center',justifyContent:'center',padding:0 }}
+                          title={isInDrive ? 'Foto guardada en Google Drive' : 'Foto en servidor'}>
+                          <img src={imgUrl} alt="medidor"
+                            style={{ width:'100%',height:'100%',objectFit:'cover' }}
+                            referrerPolicy="no-referrer"
                             onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
+                          {/* Overlay hover con icono de zoom */}
                           <div style={{ position:'absolute',inset:0,background:'rgba(0,0,0,0)',display:'flex',alignItems:'center',justifyContent:'center',transition:'background 0.15s' }}
                             onMouseEnter={e => (e.currentTarget.style.background='rgba(0,0,0,0.4)')}
                             onMouseLeave={e => (e.currentTarget.style.background='rgba(0,0,0,0)')}>
                             <ZoomIn size={13} color="#fff" style={{ opacity:0.8 }} />
                           </div>
+                          {/* Badge de Drive en esquina inferior derecha */}
+                          {isInDrive && (
+                            <div style={{
+                              position:'absolute',bottom:2,right:2,
+                              background:'rgba(0,0,0,0.65)',borderRadius:3,
+                              padding:'1px 3px',display:'flex',alignItems:'center',
+                              pointerEvents:'none',
+                            }}>
+                              <Cloud size={9} color="#fff" />
+                            </div>
+                          )}
                         </button>
                       ) : (
                         <span style={{ color:'var(--text-muted)',fontSize:'0.75rem' }}>—</span>
@@ -223,7 +263,9 @@ export default function MedicionesPage() {
           onClick={() => setZoomImg(null)}>
           <button style={{ position:'absolute',top:'1rem',right:'1rem',background:'rgba(255,255,255,0.15)',border:'none',borderRadius:'50%',width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#fff' }}
             onClick={() => setZoomImg(null)}><X size={20}/></button>
-          <img src={zoomImg} alt="medidor" style={{ maxWidth:'90vw',maxHeight:'90vh',borderRadius:8,objectFit:'contain',boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}
+          <img src={zoomImg} alt="medidor"
+            style={{ maxWidth:'90vw',maxHeight:'90vh',borderRadius:8,objectFit:'contain',boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}
+            referrerPolicy="no-referrer"
             onClick={e => e.stopPropagation()} />
         </div>
       )}
