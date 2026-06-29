@@ -6,6 +6,7 @@ import { verifySmtp } from './channels/email.channel'
 import { runDebtReminder } from './jobs/debt-reminder.job'
 import { runDispatcher } from './jobs/notification-dispatcher'
 import { runMeterImagesHousekeeping } from './jobs/meter-images-housekeeping.job'
+import { processNextReportJob, cleanupReportJobs } from './jobs/reports-processor.job'
 import { config } from './config/scheduler.config'
 import { startApi } from './api'
 
@@ -14,6 +15,15 @@ const SEP = '═'.repeat(52)
 // Cron del housekeeping de meter_images.
 // Configurable via env. Default: todos los días a las 3:00 AM hora Lima.
 const METER_IMAGES_HK_CRON = process.env.METER_IMAGES_HOUSEKEEPING_CRON || '0 3 * * *'
+
+// Cron del procesador de reportes async.
+// Default: cada 30 segundos (toma 1 job pending si lo hay).
+const REPORTS_PROCESSOR_CRON = process.env.REPORTS_PROCESSOR_CRON || '*/30 * * * * *'
+
+// Cron de limpieza de reportes viejos.
+// Default: 4 AM hora Lima (después del housekeeping de fotos).
+const REPORTS_CLEANUP_CRON = process.env.REPORTS_CLEANUP_CRON || '0 4 * * *'
+
 
 async function bootstrap(): Promise<void> {
   console.log(`\n${SEP}`)
@@ -74,6 +84,40 @@ async function bootstrap(): Promise<void> {
   } else {
     console.warn(`[Boot] ⚠ Cron inválido para housekeeping: "${METER_IMAGES_HK_CRON}"`)
   }
+
+  // ── Procesador de cola de reportes async: cada 30s ───────────
+  if (cron.validate(REPORTS_PROCESSOR_CRON)) {
+    cron.schedule(REPORTS_PROCESSOR_CRON, async () => {
+      try {
+        await processNextReportJob()
+      } catch (err: any) {
+        console.error('[ReportsProcessor] Error fatal:', err?.message)
+      }
+    }, { timezone: 'America/Lima' })
+
+    console.log(`[Boot] Reports processor registrado: "${REPORTS_PROCESSOR_CRON}"`)
+  } else {
+    console.warn(`[Boot] ⚠ Cron inválido para reports processor: "${REPORTS_PROCESSOR_CRON}"`)
+  }
+
+  // ── Limpieza diaria de reportes antiguos ─────────────────────
+  if (cron.validate(REPORTS_CLEANUP_CRON)) {
+    cron.schedule(REPORTS_CLEANUP_CRON, async () => {
+      console.log(`\n${'─'.repeat(52)}`)
+      console.log(`[ReportsCleanup] ${new Date().toISOString()}`)
+      console.log('─'.repeat(52))
+      try {
+        await cleanupReportJobs()
+      } catch (err: any) {
+        console.error('[ReportsCleanup] Error:', err?.message)
+      }
+    }, { timezone: 'America/Lima' })
+
+    console.log(`[Boot] Reports cleanup registrado: "${REPORTS_CLEANUP_CRON}" (hora Lima)`)
+  } else {
+    console.warn(`[Boot] ⚠ Cron inválido para reports cleanup: "${REPORTS_CLEANUP_CRON}"`)
+  }
+
 
   console.log(`[Boot] Canal activo: ${config.notification.channel}`)
   console.log(`[Boot] APP_URL: ${process.env.APP_URL || 'https://deparmentos.suite-os.app'}`)
