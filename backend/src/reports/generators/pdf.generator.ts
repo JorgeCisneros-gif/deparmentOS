@@ -1,12 +1,16 @@
 // src/reports/generators/pdf.generator.ts
 import { Injectable } from '@nestjs/common';
-import PDFDocument from 'pdfkit';
+// PDFKit es CommonJS, no soporta default import en TS strict.
+// Usamos require que sí funciona con CommonJS.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PDFDocument = require('pdfkit');
 import { PassThrough } from 'stream';
 import { MedicionHistorialItem, MedicionesAnalytics } from '../analytics/mediciones-analytics.service';
 import { PagoHistorialItem, PagosAnalytics } from '../analytics/pagos-analytics.service';
 
 // Tipo para una instancia de PDFKit. Reemplaza al namespace PDFKit.PDFDocument.
-type PDFDoc = InstanceType<typeof PDFDocument>;
+// Tipo permisivo — pdfkit no expone types limpios con require.
+type PDFDoc = any;
 
 // Estructura de un KPI para la grilla
 type KpiPair = [string, string];

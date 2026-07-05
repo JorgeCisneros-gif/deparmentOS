@@ -9,7 +9,6 @@ import {
 import BuildingSelector from '../components/common/BuildingSelector'
 import KpiCard from '../components/reports/KpiCard'
 import ExportButtons from '../components/reports/ExportButtons'
-import ReportStatusModal from '../components/reports/ReportStatusModal'
 import PeriodDetailDrawer from '../components/reports/PeriodDetailDrawer'
 
 interface Pago {
@@ -56,7 +55,6 @@ export default function PagosPage() {
   const [analytics, setAnalytics]     = useState<Analytics | null>(null)
   const [loading, setLoading]         = useState(false)
   const [detalle, setDetalle]         = useState<Pago | null>(null)
-  const [jobId, setJobId]             = useState<string | null>(null)
 
   useEffect(() => {
     if (selBuilding) {
@@ -89,14 +87,12 @@ export default function PagosPage() {
 
   const tieneData = historial.length > 0
 
-  // Generar opciones de años (últimos 3)
   const anioActual = new Date().getFullYear()
   const anios = [anioActual, anioActual - 1, anioActual - 2]
 
   return (
     <div style={{ padding: '2rem', maxWidth: 1200, margin: '0 auto' }}>
 
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '0.25rem' }} className="fade-up">
         <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', margin: 0 }}>
           Historial de pagos
@@ -109,7 +105,6 @@ export default function PagosPage() {
         Conciliación bancaria y salud financiera del edificio por mes.
       </p>
 
-      {/* Filtros */}
       <div style={{
         background: 'var(--bg-surface)', border: '1px solid var(--border)',
         borderRadius: 'var(--radius-lg)', padding: '0.6rem 1rem',
@@ -151,7 +146,6 @@ export default function PagosPage() {
         <button onClick={load} style={btnRefresh}><RefreshCw size={14} /></button>
       </div>
 
-      {/* KPIs */}
       {analytics && (
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -209,7 +203,6 @@ export default function PagosPage() {
         </div>
       )}
 
-      {/* Acciones */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.75rem' }}>
         <ExportButtons
           tipo="pagos"
@@ -222,17 +215,12 @@ export default function PagosPage() {
             banco: fBanco || undefined,
             estado: fEstado || undefined,
           }}
-          asyncParams={{
-            filtros: { metodo: fMetodo || undefined, banco: fBanco || undefined, estado: fEstado || undefined },
-          }}
-          onJobCreated={setJobId}
         />
         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
           {historial.length} pagos
         </span>
       </div>
 
-      {/* Tabla */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
           <Loader2 size={26} color="var(--accent)" style={{ animation: 'spin 0.8s linear infinite' }} />
@@ -290,7 +278,6 @@ export default function PagosPage() {
         </div>
       )}
 
-      {/* Drawer detalle */}
       <PeriodDetailDrawer
         open={!!detalle}
         title={detalle ? `Pago de S/. ${detalle.montoCancelado.toFixed(2)}` : ''}
@@ -299,15 +286,9 @@ export default function PagosPage() {
       >
         {detalle && <DetallePago pago={detalle} />}
       </PeriodDetailDrawer>
-
-      {jobId && <ReportStatusModal jobId={jobId} onClose={() => setJobId(null)} />}
     </div>
   )
 }
-
-// ════════════════════════════════════════════════════════════════
-//  Subcomponentes
-// ════════════════════════════════════════════════════════════════
 
 function MetodoChip({ metodo }: { metodo: string }) {
   return (
@@ -410,10 +391,6 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
   )
 }
 
-// ════════════════════════════════════════════════════════════════
-//  Helpers
-// ════════════════════════════════════════════════════════════════
-
 function formatFecha(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })
@@ -428,10 +405,6 @@ function capitalize(s: string): string {
   if (!s) return ''
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
-
-// ════════════════════════════════════════════════════════════════
-//  Estilos
-// ════════════════════════════════════════════════════════════════
 
 const lbl: React.CSSProperties = {
   fontSize: 12, color: 'var(--text-secondary)',

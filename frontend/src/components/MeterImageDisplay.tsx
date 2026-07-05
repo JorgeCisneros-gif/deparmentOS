@@ -1,49 +1,36 @@
+// src/components/MeterImageDisplay.tsx
 import { useEffect, useState } from 'react'
 import { ImageOff, Loader2, Cloud } from 'lucide-react'
 import api from '../services/api'
 
 interface Props {
-  /** ID del meter_image en DB. Si es null/undefined, muestra placeholder directo. */
+  /** ID del meter_image en DB. Si es null/undefined → placeholder. */
   meterImageId?: string | null
-  /** Texto alt y aria-label */
   alt?: string
-  /** Tamaño visual (se aplica como width/height) */
   width?: number
   height?: number
-  /** Estilo de borde extra */
   borderColor?: string
-  /** Si true, al hacer clic abre la imagen completa en modal */
   clickable?: boolean
-  /** Callback opcional al clickear (override del comportamiento default) */
   onClick?: () => void
-  /** Si true, muestra un ícono de Drive cuando la foto está en Drive */
   showProviderBadge?: boolean
 }
 
 type LoadState = 'idle' | 'loading' | 'loaded' | 'not-found' | 'error'
 type StorageProvider = 'local' | 'google_drive'
 
-interface MeterImageResponse {
-  id: string
-  filename: string
-  storageProvider: StorageProvider
-  externalUrl: string | null
-  filepath?: string | null
-}
-
 /**
- * Componente reutilizable para mostrar fotos de medidores.
+ * Muestra fotos de medidores.
  *
- * Maneja 3 fuentes posibles de la imagen:
- *  - Drive del cliente (externalUrl)  → usa la URL directa
- *  - Servidor local (legacy)          → /uploads/meters/{filename}
- *  - Sin foto                         → placeholder elegante
+ * Estrategia:
+ *  1. Hace metadata-fetch al endpoint /readings/meter-image/:id para
+ *     determinar el provider y mostrar el badge correcto.
+ *  2. Hace bytes-fetch al endpoint /content que sirve los bytes desde
+ *     filesystem o desde Drive (proxiando).
  *
- * Estados visuales:
- *  - meterImageId null/undefined  → "Sin foto"
- *  - meter_image no existe        → "Imagen no disponible"
- *  - archivo no carga             → "Error al cargar"
- *  - badge "Drive" cuando aplica  → indica que la foto está en Drive del cliente
+ * Por qué no usamos directamente externalUrl del Drive:
+ *  - Google Drive devuelve text/html (página de visor) en vez de la imagen
+ *    cuando se carga vía <img src>.
+ *  - El backend proxia los bytes con autenticación OAuth correcta.
  */
 export default function MeterImageDisplay({
   meterImageId,
@@ -55,12 +42,10 @@ export default function MeterImageDisplay({
   onClick,
   showProviderBadge = false,
 }: Props) {
-  const [state, setState] = useState<LoadState>('idle')
-  const [src, setSrc] = useState<string | null>(null)
+  const [state, setState]       = useState<LoadState>('idle')
+  const [src, setSrc]           = useState<string | null>(null)
   const [filename, setFilename] = useState<string | null>(null)
   const [provider, setProvider] = useState<StorageProvider>('local')
-
-  const apiBase = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || ''
 
   useEffect(() => {
     if (!meterImageId) {
@@ -69,144 +54,131 @@ export default function MeterImageDisplay({
       return
     }
 
+    let revokeUrl: string | null = null
+    let cancelled = false
     setState('loading')
-    api
-      .get<MeterImageResponse>(`/readings/meter-image/${meterImageId}`)
-      .then(({ data }) => {
-        if (!data) {
+
+    const doFetch = async () => {
+      try {
+        // 1) Metadata
+        const meta = await api.get(`/readings/meter-image/${meterImageId}`)
+        if (cancelled) return
+        if (!meta.data) {
           setState('not-found')
           return
         }
+        setFilename(meta.data.filename)
+        setProvider(meta.data.storageProvider || 'local')
 
-        setFilename(data.filename)
-        setProvider(data.storageProvider)
+        // 2) Bytes vía endpoint /content
+        const bytes = await api.get(`/readings/meter-image/${meterImageId}/content`, {
+          responseType: 'blob',
+        })
+        if (cancelled) return
 
-        // Decide la fuente según el provider
-        if (data.storageProvider === 'google_drive' && data.externalUrl) {
-          // Imagen en Drive del cliente — URL directa
-          setSrc(data.externalUrl)
-          setState('loaded')
-        } else if (data.filename) {
-          // Imagen local — URL al servidor
-          setSrc(`${apiBase}/uploads/meters/${data.filename}`)
-          setState('loaded')
-        } else {
-          // Foto sin filepath y sin URL externa = inaccesible
-          setState('not-found')
-        }
-      })
-      .catch((err) => {
-        if (err?.response?.status === 404) {
-          setState('not-found')
-        } else {
-          setState('error')
-        }
-      })
-  }, [meterImageId, apiBase])
+        const url = URL.createObjectURL(bytes.data as Blob)
+        revokeUrl = url
+        setSrc(url)
+        setState('loaded')
 
-  // ── Estilo base del contenedor ──
-  const baseStyle: React.CSSProperties = {
-    width,
-    height,
-    borderRadius: 6,
-    border: `1px solid ${borderColor}`,
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: clickable ? 'pointer' : 'default',
-    overflow: 'hidden',
-    background: 'var(--bg-elevated)',
-    position: 'relative',
-  }
+      } catch (err: any) {
+        if (cancelled) return
+        if (err?.response?.status === 404) setState('not-found')
+        else setState('error')
+      }
+    }
 
-  // ── Loading ──
-  if (state === 'loading' || state === 'idle') {
-    return (
-      <div style={baseStyle} aria-label="Cargando imagen del medidor">
-        <Loader2
-          size={Math.min(width, height) * 0.3}
-          color="var(--text-muted)"
-          style={{ animation: 'spin 0.8s linear infinite' }}
-        />
-      </div>
-    )
-  }
+    doFetch()
 
-  // ── No disponible ──
-  if (state === 'not-found' || state === 'error') {
-    const message = !meterImageId
-      ? 'Sin foto'
-      : state === 'not-found'
-        ? 'Imagen no disponible'
-        : 'Error al cargar'
+    return () => {
+      cancelled = true
+      if (revokeUrl) URL.revokeObjectURL(revokeUrl)
+    }
+  }, [meterImageId])
 
-    return (
-      <div
-        style={{ ...baseStyle, flexDirection: 'column', gap: 4, padding: 4 }}
-        title={message}
-        aria-label={message}
-      >
-        <ImageOff size={Math.min(width, height) * 0.32} color="var(--text-muted)" />
-        <p
-          style={{
-            fontSize: Math.min(width, height) * 0.11,
-            color: 'var(--text-muted)',
-            margin: 0,
-            textAlign: 'center',
-            lineHeight: 1.1,
-          }}
-        >
-          {message}
-        </p>
-      </div>
-    )
-  }
-
-  // ── Loaded ──
   const handleClick = () => {
-    if (onClick) {
-      onClick()
-    } else if (clickable && src) {
-      window.open(src, '_blank', 'noopener,noreferrer')
+    if (!clickable) return
+    if (onClick) onClick()
+    else if (src) {
+      // Default: abrir en ventana nueva
+      window.open(src, '_blank')
     }
   }
 
-  return (
-    <div style={{ ...baseStyle, padding: 0 }} title={filename || alt}>
-      <img
-        src={src!}
-        alt={alt}
-        onClick={handleClick}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          cursor: clickable ? 'pointer' : 'default',
-          display: 'block',
-        }}
-        onError={() => setState('error')}
-        referrerPolicy="no-referrer"
-      />
+  // Estados visuales
+  if (state === 'not-found' || state === 'idle') {
+    return (
+      <div style={{
+        width, height,
+        border: `1px dashed ${borderColor}`,
+        borderRadius: 6,
+        background: 'var(--bg-elevated)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--text-muted)',
+      }} title="Sin foto">
+        <ImageOff size={18} />
+      </div>
+    )
+  }
 
-      {/* Badge "Drive" en la esquina si la foto está en Drive del cliente */}
+  if (state === 'error') {
+    return (
+      <div style={{
+        width, height,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 6,
+        background: 'var(--bg-elevated)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        color: 'var(--text-muted)', fontSize: 10, gap: 2,
+      }}>
+        <ImageOff size={14} />
+        <span>Error</span>
+      </div>
+    )
+  }
+
+  if (state === 'loading' || !src) {
+    return (
+      <div style={{
+        width, height,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 6,
+        background: 'var(--bg-elevated)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width, height,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 6,
+        overflow: 'hidden',
+        cursor: clickable ? 'pointer' : 'default',
+      }}
+      onClick={handleClick}
+      role={clickable ? 'button' : undefined}
+      aria-label={alt}
+    >
+      <img src={src} alt={alt} style={{
+        width: '100%', height: '100%', objectFit: 'cover',
+      }} />
       {showProviderBadge && provider === 'google_drive' && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 2,
-            right: 2,
-            background: 'rgba(0,0,0,0.6)',
-            borderRadius: 4,
-            padding: '1px 4px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-            pointerEvents: 'none',
-          }}
-          aria-label="Foto en Google Drive"
-        >
-          <Cloud size={Math.max(8, height * 0.12)} color="#fff" />
+        <div style={{
+          position: 'absolute', bottom: 2, right: 2,
+          background: 'rgba(0,0,0,0.65)',
+          borderRadius: 3,
+          padding: '1px 3px',
+          display: 'flex', alignItems: 'center',
+          pointerEvents: 'none',
+        }} title="Foto en Google Drive">
+          <Cloud size={9} color="#fff" />
         </div>
       )}
     </div>

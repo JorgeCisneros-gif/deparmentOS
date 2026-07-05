@@ -3,13 +3,12 @@ import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 import {
-  Droplets, Loader2, RefreshCw, TrendingUp, TrendingDown, Minus,
+  Droplets, Loader2, RefreshCw, TrendingUp, TrendingDown,
   Equal, AlertTriangle, CheckCircle2, Cloud,
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
 import KpiCard from '../components/reports/KpiCard'
 import ExportButtons from '../components/reports/ExportButtons'
-import ReportStatusModal from '../components/reports/ReportStatusModal'
 import PeriodDetailDrawer from '../components/reports/PeriodDetailDrawer'
 
 interface Department { id: string; nrDepartamento: string }
@@ -54,7 +53,6 @@ export default function MedicionesPage() {
   const [analytics, setAnalytics]     = useState<Analytics | null>(null)
   const [loading, setLoading]         = useState(false)
   const [detalle, setDetalle]         = useState<MedicionItem | null>(null)
-  const [jobId, setJobId]             = useState<string | null>(null)
 
   useEffect(() => {
     if (!selBuilding) return
@@ -199,10 +197,6 @@ export default function MedicionesPage() {
             edificio: edificioNombre,
             depto: deptoActual?.nrDepartamento || '',
           }}
-          asyncParams={{
-            rangoPeriodo: `Últimos ${maxMeses} meses`,
-          }}
-          onJobCreated={setJobId}
         />
         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
           {analytics ? `${analytics.totalPeriodos} períodos` : ''}
@@ -291,9 +285,6 @@ export default function MedicionesPage() {
       >
         {detalle && <DetalleMedicion item={detalle} />}
       </PeriodDetailDrawer>
-
-      {/* Modal de job async */}
-      {jobId && <ReportStatusModal jobId={jobId} onClose={() => setJobId(null)} />}
     </div>
   )
 }

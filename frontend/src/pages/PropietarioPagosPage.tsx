@@ -5,9 +5,10 @@ import { useTz } from '../store/timezone.store'
 import { useAuthStore } from '../store/auth.store'
 import toast from 'react-hot-toast'
 import {
-  CreditCard, CheckCircle2, Clock, AlertCircle,
-  X, Save, Loader2, Upload, Check,
+  CreditCard, CheckCircle2, Clock,
+  X, Loader2,
 } from 'lucide-react'
+import PhotoInput from '../components/PhotoInput'
 
 const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre']
 const TIPOS_PAGO = ['efectivo','transferencia','yape','plin','otro']
@@ -33,7 +34,6 @@ export default function PropietarioPagosPage() {
     setLoading(true)
     try {
       const { data } = await api.get('/payments/my-fees')
-      // Ordenar: pendientes primero, luego por período desc
       const sorted = (data || []).sort((a: any, b: any) => {
         const aPend = a.statusPago !== 'pagado' ? 0 : 1
         const bPend = b.statusPago !== 'pagado' ? 0 : 1
@@ -79,15 +79,12 @@ export default function PropietarioPagosPage() {
   )
 }
 
-// ── Tarjeta de cuota ──────────────────────────────────────────
-
 function FeeCard({ fee, onPagar }: { fee: any; onPagar: () => void }) {
   const cfg     = STATUS_CFG[fee.statusPago] || STATUS_CFG['pendiente']
   const montos  = fee.montosServicios || {}
   const { fmt } = useTz()
   const venc    = fee.fechaVencimiento ? new Date(fee.fechaVencimiento) : null
   const diasRet = venc && fee.statusPago !== 'pagado' ? Math.max(0,Math.floor((Date.now()-venc.getTime())/86400000)) : 0
-  const canPay  = fee.mensajeEnviado && !['pagado','pendiente_aprobacion'].includes(fee.statusPago)
 
   return (
     <div style={{ background:'var(--bg-surface)',border:`1px solid var(--border)`,borderLeft:`3px solid ${cfg.color}`,borderRadius:'var(--radius-lg)',padding:'1.25rem' }} className="fade-up">
@@ -114,7 +111,6 @@ function FeeCard({ fee, onPagar }: { fee: any; onPagar: () => void }) {
         </div>
       </div>
 
-      {/* Desglose */}
       <div style={{ background:'var(--bg-elevated)',borderRadius:'var(--radius)',padding:'0.75rem 1rem',marginBottom:'1rem',display:'flex',flexWrap:'wrap',gap:'0.5rem 1.5rem' }}>
         {Object.entries(montos).map(([key, item]: [string, any]) => (
           item.monto > 0 && (
@@ -126,7 +122,6 @@ function FeeCard({ fee, onPagar }: { fee: any; onPagar: () => void }) {
         ))}
       </div>
 
-      {/* Historial de pagos de esta cuota */}
       {fee.pagos?.length > 0 && (
         <div style={{ marginBottom:'1rem' }}>
           {fee.pagos.map((p: any) => (
@@ -143,7 +138,6 @@ function FeeCard({ fee, onPagar }: { fee: any; onPagar: () => void }) {
         </div>
       )}
 
-      {/* Acción */}
       {!fee.mensajeEnviado ? (
         <p style={{ fontSize:'0.78rem',color:'var(--text-muted)',display:'flex',alignItems:'center',gap:'0.3rem' }}>
           🔒 El supervisor aún no ha habilitado el pago para este período
@@ -165,8 +159,6 @@ function FeeCard({ fee, onPagar }: { fee: any; onPagar: () => void }) {
   )
 }
 
-// ── Modal pago propietario ────────────────────────────────────
-
 function PagoModal({ fee, onClose, onSaved }: any) {
   const { today, fmt } = useTz()
   const [form, setForm]             = useState({ fechaPago:today(), monto:String(Math.max(0,(fee.montoTotal||0)-(fee.totalPagado||0))), tipoPago:'transferencia', banco:'', referencia:'', observacion:'' })
@@ -186,7 +178,6 @@ function PagoModal({ fee, onClose, onSaved }: any) {
         observacion:   form.observacion || undefined,
         fechaPago:     form.fechaPago,
       })
-      // Subir comprobante si lo hay
       if (comprobante && pago?.id) {
         const base64 = await new Promise<string>((res,rej) => {
           const r = new FileReader(); r.onload=()=>res(r.result as string); r.onerror=()=>rej(); r.readAsDataURL(comprobante)
@@ -214,7 +205,6 @@ function PagoModal({ fee, onClose, onSaved }: any) {
         </div>
 
         <div style={{ padding:'1.5rem',display:'flex',flexDirection:'column',gap:'1rem' }}>
-          {/* Info */}
           <div style={{ background:'rgba(167,139,250,0.08)',border:'1px solid rgba(167,139,250,0.25)',borderRadius:'var(--radius)',padding:'0.75rem 1rem' }}>
             <p style={{ fontSize:'0.8rem',color:'#a78bfa',fontWeight:600 }}>⏳ Tu pago quedará en revisión hasta que el supervisor lo apruebe</p>
           </div>
@@ -248,26 +238,17 @@ function PagoModal({ fee, onClose, onSaved }: any) {
             <input value={form.referencia} onChange={e=>setForm({...form,referencia:e.target.value})} placeholder="Nro. de operación"/>
           </F>
 
-          {/* Comprobante */}
+          {/* Comprobante — ahora con PhotoInput (foto o galería) */}
           <div>
             <label style={{ fontSize:'0.75rem',fontWeight:600,color:'var(--text-secondary)',textTransform:'uppercase' as const,letterSpacing:'0.04em',display:'block',marginBottom:'0.4rem' }}>
-              Comprobante de pago (imagen)
+              Comprobante de pago
             </label>
-            <label style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'0.4rem',border:`1.5px dashed ${comprobante?'var(--green)':'var(--border)'}`,borderRadius:'var(--radius)',padding:'1rem',cursor:'pointer',background:comprobante?'rgba(62,207,142,0.05)':'var(--bg-elevated)',transition:'all 0.2s' }}>
-              <input type="file" accept="image/*" style={{ display:'none' }} onChange={e=>setComprobante(e.target.files?.[0]||null)}/>
-              {comprobante ? (
-                <>
-                  <img src={URL.createObjectURL(comprobante)} alt="preview" style={{ maxHeight:100,maxWidth:'100%',objectFit:'contain',borderRadius:4 }}/>
-                  <p style={{ fontSize:'0.75rem',color:'var(--green)',fontWeight:600 }}>✓ {comprobante.name}</p>
-                </>
-              ) : (
-                <>
-                  <Upload size={20} color="var(--text-muted)"/>
-                  <p style={{ fontSize:'0.82rem',color:'var(--text-secondary)' }}>Toca para subir comprobante</p>
-                  <p style={{ fontSize:'0.72rem',color:'var(--text-muted)' }}>JPG, PNG — opcional pero recomendado</p>
-                </>
-              )}
-            </label>
+            <PhotoInput
+              value={comprobante}
+              onChange={setComprobante}
+              placeholder="Adjunta foto del comprobante"
+              previewHeight={120}
+            />
           </div>
 
           <F label="Observación">

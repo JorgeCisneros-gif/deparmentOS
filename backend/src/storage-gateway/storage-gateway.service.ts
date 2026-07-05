@@ -19,9 +19,6 @@ import {
  * - Construcción de URLs con appSource fijo a 'departmentos'
  * - Manejo de errores transformándolos en excepciones NestJS adecuadas
  * - Timeouts y reintentos básicos
- *
- * En la Entrega 1 solo usamos los endpoints de lectura.
- * Las operaciones de upload/connect/disconnect vienen en entregas posteriores.
  */
 @Injectable()
 export class StorageGatewayService {
@@ -33,9 +30,6 @@ export class StorageGatewayService {
     const baseURL = process.env.STORAGE_GATEWAY_URL;
     const apiKey  = process.env.STORAGE_GATEWAY_API_KEY;
 
-    // Si no está configurado, el módulo queda en modo "disabled"
-    // y todos los métodos lanzan ServiceUnavailableException.
-    // Esto permite que DepartmentOS arranque incluso sin gateway configurado.
     this.enabled = Boolean(baseURL && apiKey);
 
     if (!this.enabled) {
@@ -49,7 +43,7 @@ export class StorageGatewayService {
 
     this.http = axios.create({
       baseURL,
-      timeout: 30000, // 30s — uploads de fotos pueden tardar
+      timeout: 30000,
       headers: { 'x-api-key': apiKey || '' },
     });
   }
@@ -65,10 +59,6 @@ export class StorageGatewayService {
 
   // ── Health check ──────────────────────────────────────────────
 
-  /**
-   * Verifica que el gateway esté reachable y responda.
-   * Útil para diagnóstico y para mostrar el estado en la UI.
-   */
   async checkHealth(): Promise<GatewayHealth> {
     this.assertEnabled();
     try {
@@ -79,14 +69,8 @@ export class StorageGatewayService {
     }
   }
 
-  // ── Estado del provider para una org ──────────────────────────
+  // ── Estado del provider ──────────────────────────────────────
 
-  /**
-   * Devuelve si el grupo tiene Drive conectado y los datos del provider.
-   *
-   * El gateway responde 200 incluso si no hay nada configurado
-   * (en ese caso { configured: false, type: 'internal' }).
-   */
   async getProviderStatus(orgId: string): Promise<ProviderStatus> {
     this.assertEnabled();
     try {
@@ -100,19 +84,8 @@ export class StorageGatewayService {
     }
   }
 
-  // ── Upload de archivo ─────────────────────────────────────────
-  //
-  // No se usa en Entrega 1 pero está implementado para que las
-  // siguientes entregas solo tengan que llamarlo. La Entrega 3
-  // lo integrará con el confirmFromSession del flujo OCR.
+  // ── Upload ───────────────────────────────────────────────────
 
-  /**
-   * Sube un archivo al gateway. El gateway decide si va al Drive del
-   * cliente (si está conectado) o al storage temporal interno.
-   *
-   * Devuelve la referencia (`fileId`) que debe guardarse en DepartmentOS
-   * para luego pedir la URL de descarga.
-   */
   async uploadFile(params: UploadFileParams): Promise<UploadResult> {
     this.assertEnabled();
 
@@ -144,7 +117,7 @@ export class StorageGatewayService {
     }
   }
 
-  /** Obtiene una URL de descarga para un archivo previamente subido. */
+  /** URL de descarga (sirve para mostrar en `<a>` pero no siempre en `<img>`). */
   async getDownloadUrl(fileId: string, orgId: string): Promise<string> {
     this.assertEnabled();
     try {
@@ -155,6 +128,63 @@ export class StorageGatewayService {
       return data.url;
     } catch (err) {
       throw this.translateError(err, 'obteniendo URL de descarga');
+    }
+  }
+
+  /**
+   * Descarga los bytes binarios del archivo desde el gateway.
+   *
+   * Usa el endpoint /internal/files/:id que devuelve directamente
+   * el contenido del archivo (no una URL externa). El gateway baja
+   * la imagen del Drive con sus credenciales OAuth y la sirve
+   * como bytes.
+   *
+   * Útil para servir imágenes desde el backend cuando el browser
+   * no puede cargar las URLs públicas del Drive directamente
+   * (hotlink bloqueado, content-type incorrecto, etc.).
+   */
+  async downloadFileBytes(
+    fileId: string,
+    orgId: string,
+  ): Promise<{ buffer: Buffer; contentType: string; fileName?: string }> {
+    this.assertEnabled();
+    try {
+      const response = await this.http.get(
+        `/internal/files/${fileId}`,
+        {
+          params: { orgId },
+          responseType: 'arraybuffer',
+          // El internal endpoint puede tardar más por la descarga del Drive
+          timeout: 60000,
+        },
+      );
+
+      const contentType = String(response.headers['content-type'] || 'application/octet-stream');
+
+      // Si el gateway devolvió JSON (típico cuando hay un error pero el endpoint
+      // no lo serializa como error), inspeccionarlo para detectarlo.
+      if (contentType.includes('application/json')) {
+        const text = Buffer.from(response.data).toString('utf-8');
+        throw new Error(`Gateway devolvió JSON en lugar de imagen: ${text.slice(0, 200)}`);
+      }
+
+      // Extraer filename del header Content-Disposition (si viene)
+      let fileName: string | undefined;
+      const disp = response.headers['content-disposition']
+        ? String(response.headers['content-disposition'])
+        : undefined;
+      if (disp) {
+        const match = /filename\*?=(?:UTF-\d['']*)?["']?([^"';]+)/i.exec(disp);
+        if (match) fileName = decodeURIComponent(match[1]);
+      }
+
+      return {
+        buffer: Buffer.from(response.data),
+        contentType,
+        fileName,
+      };
+    } catch (err) {
+      throw this.translateError(err, 'descargando bytes del archivo');
     }
   }
 
@@ -174,13 +204,6 @@ export class StorageGatewayService {
     };
   }
 
-  /**
-   * Transforma errores axios en excepciones NestJS adecuadas para el
-   * cliente final.  En particular:
-   * - ECONNREFUSED / ENOTFOUND → 503 Service Unavailable
-   * - Timeouts → 502 Bad Gateway
-   * - Errores HTTP del gateway → se propagan con su status original
-   */
   private translateError(err: any, context: string): Error {
     const axiosErr = err as AxiosError<any>;
 
@@ -215,9 +238,6 @@ export class StorageGatewayService {
     return new BadGatewayException(`Error en storage: ${axiosErr.message}`);
   }
 
-  // ── Utilidad para que otros servicios sepan si está habilitado ──
-
-  /** Para que otros servicios decidan si pueden o no usar el gateway. */
   isEnabled(): boolean {
     return this.enabled;
   }

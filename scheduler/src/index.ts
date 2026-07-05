@@ -6,23 +6,19 @@ import { verifySmtp } from './channels/email.channel'
 import { runDebtReminder } from './jobs/debt-reminder.job'
 import { runDispatcher } from './jobs/notification-dispatcher'
 import { runMeterImagesHousekeeping } from './jobs/meter-images-housekeeping.job'
-import { processNextReportJob, cleanupReportJobs } from './jobs/reports-processor.job'
+import { runVouchersHousekeeping } from './jobs/vouchers-housekeeping.job'
 import { config } from './config/scheduler.config'
 import { startApi } from './api'
 
 const SEP = '═'.repeat(52)
 
 // Cron del housekeeping de meter_images.
-// Configurable via env. Default: todos los días a las 3:00 AM hora Lima.
+// Default: todos los días a las 3:00 AM hora Lima.
 const METER_IMAGES_HK_CRON = process.env.METER_IMAGES_HOUSEKEEPING_CRON || '0 3 * * *'
 
-// Cron del procesador de reportes async.
-// Default: cada 30 segundos (toma 1 job pending si lo hay).
-const REPORTS_PROCESSOR_CRON = process.env.REPORTS_PROCESSOR_CRON || '*/30 * * * * *'
-
-// Cron de limpieza de reportes viejos.
-// Default: 4 AM hora Lima (después del housekeeping de fotos).
-const REPORTS_CLEANUP_CRON = process.env.REPORTS_CLEANUP_CRON || '0 4 * * *'
+// Cron del housekeeping de comprobantes de pago.
+// Default: todos los días a las 3:15 AM hora Lima (15 min después de mediciones).
+const VOUCHERS_HK_CRON = process.env.VOUCHERS_HOUSEKEEPING_CRON || '15 3 * * *'
 
 
 async function bootstrap(): Promise<void> {
@@ -38,15 +34,13 @@ async function bootstrap(): Promise<void> {
     await verifySmtp()
   }
 
-  // Arrancar API HTTP para disparos manuales, pruebas y monitoreo
   try {
     startApi()
   } catch (err: any) {
     console.error('[Boot] ✗ Error al iniciar API HTTP:', err?.message)
   }
 
-  // ── Job legacy: debt-reminder con cron fijo desde .env ───────
-  // Se mantiene para compatibilidad — el dispatcher v2 lo reemplaza gradualmente
+  // ── Job legacy: debt-reminder ──
   const legacyExpression = config.cron.expression
   if (cron.validate(legacyExpression)) {
     cron.schedule(legacyExpression, async () => {
@@ -59,7 +53,7 @@ async function bootstrap(): Promise<void> {
     console.log(`[Boot] Cron legacy registrado: "${legacyExpression}"`)
   }
 
-  // ── Dispatcher v2: cron cada minuto — lee notificacion_config ─
+  // ── Dispatcher v2: cada minuto ──
   cron.schedule('* * * * *', async () => {
     try { await runDispatcher() }
     catch (err: any) { console.error('[Dispatcher] Error fatal:', err?.message) }
@@ -67,7 +61,7 @@ async function bootstrap(): Promise<void> {
 
   console.log('[Boot] Dispatcher v2 registrado: cada minuto')
 
-  // ── Housekeeping de meter_images: diario ─────────────────────
+  // ── Housekeeping de meter_images: diario ──
   if (cron.validate(METER_IMAGES_HK_CRON)) {
     cron.schedule(METER_IMAGES_HK_CRON, async () => {
       console.log(`\n${'─'.repeat(52)}`)
@@ -82,40 +76,25 @@ async function bootstrap(): Promise<void> {
 
     console.log(`[Boot] Meter images housekeeping registrado: "${METER_IMAGES_HK_CRON}" (hora Lima)`)
   } else {
-    console.warn(`[Boot] ⚠ Cron inválido para housekeeping: "${METER_IMAGES_HK_CRON}"`)
+    console.warn(`[Boot] ⚠ Cron inválido para meter housekeeping: "${METER_IMAGES_HK_CRON}"`)
   }
 
-  // ── Procesador de cola de reportes async: cada 30s ───────────
-  if (cron.validate(REPORTS_PROCESSOR_CRON)) {
-    cron.schedule(REPORTS_PROCESSOR_CRON, async () => {
-      try {
-        await processNextReportJob()
-      } catch (err: any) {
-        console.error('[ReportsProcessor] Error fatal:', err?.message)
-      }
-    }, { timezone: 'America/Lima' })
-
-    console.log(`[Boot] Reports processor registrado: "${REPORTS_PROCESSOR_CRON}"`)
-  } else {
-    console.warn(`[Boot] ⚠ Cron inválido para reports processor: "${REPORTS_PROCESSOR_CRON}"`)
-  }
-
-  // ── Limpieza diaria de reportes antiguos ─────────────────────
-  if (cron.validate(REPORTS_CLEANUP_CRON)) {
-    cron.schedule(REPORTS_CLEANUP_CRON, async () => {
+  // ── Housekeeping de payment_vouchers: diario ──
+  if (cron.validate(VOUCHERS_HK_CRON)) {
+    cron.schedule(VOUCHERS_HK_CRON, async () => {
       console.log(`\n${'─'.repeat(52)}`)
-      console.log(`[ReportsCleanup] ${new Date().toISOString()}`)
+      console.log(`[VouchersHousekeeping] ${new Date().toISOString()}`)
       console.log('─'.repeat(52))
       try {
-        await cleanupReportJobs()
+        await runVouchersHousekeeping()
       } catch (err: any) {
-        console.error('[ReportsCleanup] Error:', err?.message)
+        console.error('[VouchersHousekeeping] Error:', err?.message)
       }
     }, { timezone: 'America/Lima' })
 
-    console.log(`[Boot] Reports cleanup registrado: "${REPORTS_CLEANUP_CRON}" (hora Lima)`)
+    console.log(`[Boot] Vouchers housekeeping registrado: "${VOUCHERS_HK_CRON}" (hora Lima)`)
   } else {
-    console.warn(`[Boot] ⚠ Cron inválido para reports cleanup: "${REPORTS_CLEANUP_CRON}"`)
+    console.warn(`[Boot] ⚠ Cron inválido para vouchers housekeeping: "${VOUCHERS_HK_CRON}"`)
   }
 
 
@@ -124,7 +103,6 @@ async function bootstrap(): Promise<void> {
   console.log(`[Boot] BACKEND_INTERNAL_URL: ${process.env.BACKEND_INTERNAL_URL || 'http://backend:3000'}`)
   console.log(SEP + '\n')
 
-  // RUN_NOW para pruebas
   if (process.env.RUN_NOW === 'true') {
     console.log('[Boot] RUN_NOW=true — ejecutando dispatcher inmediatamente...\n')
     await runDispatcher()
