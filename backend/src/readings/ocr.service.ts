@@ -21,24 +21,55 @@ export class OcrService {
     return endpoint;
   }
 
+  /**
+   * Procesa OCR a partir de un Buffer en memoria.
+   * No escribe a disco — ideal para flujos donde no quieres persistir
+   * imágenes que el usuario podría descartar.
+   */
+  async readMeterFromBuffer(
+    buffer: Buffer,
+    filename = 'meter.jpg',
+  ): Promise<OcrResult> {
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('Buffer de imagen vacío');
+    }
+
+    const endpoint = this.ocrEndpoint;
+    this.logger.log(`Enviando imagen (${buffer.length} bytes) al servicio OCR: ${endpoint}`);
+
+    const form = new FormData();
+    // form-data acepta Buffer directamente. Le indicamos filename y contentType
+    // para que el endpoint Python lo trate como un upload normal.
+    form.append('file', buffer, {
+      filename,
+      contentType: 'image/jpeg',
+    });
+
+    return this.callOcrEndpoint(form);
+  }
+
+  /**
+   * Mantenido para retrocompatibilidad. Internamente lee el archivo
+   * y delega en readMeterFromBuffer. Se puede ir eliminando cuando
+   * todo el código consuma readMeterFromBuffer directamente.
+   */
   async readMeter(imagePath: string): Promise<OcrResult> {
     if (!fs.existsSync(imagePath)) {
       throw new BadRequestException(`Imagen no encontrada: ${imagePath}`);
     }
+    const buffer = fs.readFileSync(imagePath);
+    return this.readMeterFromBuffer(buffer, imagePath);
+  }
 
+  // ── Núcleo de la llamada HTTP (compartido por ambos métodos) ──
+
+  private async callOcrEndpoint(form: FormData): Promise<OcrResult> {
     const endpoint = this.ocrEndpoint;
-    this.logger.log(`Enviando imagen al servicio OCR: ${endpoint}`);
-
-    const form = new FormData();
-    form.append('file', fs.createReadStream(imagePath));
-
     let rawResponse: any;
 
     try {
       const response = await axios.post(endpoint, form, {
-        headers: {
-          ...form.getHeaders(),
-        },
+        headers: { ...form.getHeaders() },
         timeout: 30000,
       });
 

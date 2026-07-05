@@ -11,6 +11,7 @@ import {
   ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import BuildingSelector from '../components/common/BuildingSelector'
+import StorageIndicator from '../components/StorageIndicator'
 
 const MESES = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic']
 
@@ -245,10 +246,16 @@ export default function DashboardPage() {
           <h1 style={{ fontFamily:'var(--font-display)',fontSize:'1.8rem',fontWeight:700,letterSpacing:'-0.02em',marginBottom:'0.2rem' }}>Dashboard</h1>
           <p style={{ color:'var(--text-secondary)',fontSize:'0.875rem' }}>{supervisor ? 'Resumen general del edificio' : 'Últimos 6 meses de consumo'}</p>
         </div>
-        <div style={{ display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,padding:'0.4rem 0.8rem' }}>
-          <div style={{ width:7,height:7,borderRadius:'50%',background:'var(--green)',boxShadow:'0 0 6px var(--green)' }} />
-          <span style={{ fontSize:'0.78rem',color:'var(--text-secondary)' }}>En vivo</span>
-        </div>
+        <div style={{ display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap' }}>
+
+  <StorageIndicator />
+
+  <div style={{ display:'flex',alignItems:'center',gap:'0.5rem',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:20,padding:'0.4rem 0.8rem' }}>
+    <div style={{ width:7,height:7,borderRadius:'50%',background:'var(--green)',boxShadow:'0 0 6px var(--green)' }} />
+    <span style={{ fontSize:'0.78rem',color:'var(--text-secondary)' }}>En vivo</span>
+  </div>
+
+</div>
       </div>
 
       {error && (

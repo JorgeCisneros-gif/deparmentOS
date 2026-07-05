@@ -1,35 +1,56 @@
 // src/payments/payments.controller.ts
 import {
   Controller, Get, Post, Body, Param, Query,
-  UseGuards, Request, BadRequestException, Patch,
+  UseGuards, Request, Response, BadRequestException, Patch, NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiBody } from '@nestjs/swagger';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PaymentsService } from './payments.service';
 import { CreatePagoAutoDto, CreatePaymentDto } from './payments.dto';
 import { ImageUploadService } from '../shared/image-upload.service';
 import { FeesService } from '../fees/fees.service';
+import { StorageGatewayService } from '../storage-gateway/storage-gateway.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { SchedulerTokenGuard } from '../auth/guards/scheduler-token.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/user.entity';
 
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.GESTION)
 @Controller('payments')
 export class PaymentsController {
+  private readonly logger = new Logger(PaymentsController.name);
+
   constructor(
     private readonly svc: PaymentsService,
     private readonly imageUpload: ImageUploadService,
-    private readonly feesService: FeesService,   // ← inyectado correctamente
+    private readonly feesService: FeesService,
+    private readonly storageGateway: StorageGatewayService,
   ) {}
 
-  // ── IMPORTANTE: rutas estáticas ANTES de /:id ────────────────
+  // ════════════════════════════════════════════════════════════
+  //  HOUSEKEEPING (scheduler only)
+  // ════════════════════════════════════════════════════════════
 
-  // Cuotas del propietario autenticado
+  @Post('housekeeping')
+  @UseGuards(SchedulerTokenGuard)
+  @ApiOperation({
+    summary: '🧹 Housekeeping de comprobantes de pago [Solo scheduler]',
+  })
+  housekeeping() {
+    return this.svc.runHousekeeping();
+  }
+
+  // ════════════════════════════════════════════════════════════
+  //  ENDPOINTS HUMANOS (JWT) — rutas estáticas primero
+  // ════════════════════════════════════════════════════════════
+
   @Get('my-fees')
-  @Roles(UserRole.SUPERVISOR, UserRole.PROPIETARIO)  // ambos roles
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.PROPIETARIO)
   @ApiOperation({ summary: 'Cuotas del departamento del usuario autenticado' })
   @ApiQuery({ name: 'year',  required: false, type: Number })
   @ApiQuery({ name: 'month', required: false, type: Number })
@@ -43,15 +64,17 @@ export class PaymentsController {
     return this.feesService.findAll(idDepartamento, year ? +year : undefined, month ? +month : undefined);
   }
 
-  // Pagos pendientes de aprobación
   @Get('pending-approval')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Listar pagos pendientes de aprobación del supervisor' })
   getPendingApproval() {
     return this.svc.getPendingApproval();
   }
 
-  // Resumen del período
   @Get('period-summary')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Resumen completo del período para cobros' })
   @ApiQuery({ name: 'buildingId', required: true })
   @ApiQuery({ name: 'month', required: true, type: Number })
@@ -64,8 +87,9 @@ export class PaymentsController {
     return this.svc.getPeriodSummary(buildingId, +month, +year);
   }
 
-  // Saldo pendiente por edificio
   @Get('pending')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Saldo pendiente por edificio y período' })
   @ApiQuery({ name: 'buildingId', required: true })
   @ApiQuery({ name: 'month', required: true, type: Number })
@@ -78,8 +102,9 @@ export class PaymentsController {
     return this.svc.getPendingByBuilding(buildingId, +month, +year);
   }
 
-  // Listar pagos
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Listar pagos' })
   @ApiQuery({ name: 'feeId', required: false })
   @ApiQuery({ name: 'ownerId', required: false })
@@ -87,38 +112,118 @@ export class PaymentsController {
     return this.svc.findAll(feeId, ownerId);
   }
 
-  // ── POST ──────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  //  COMPROBANTES (vouchers) — endpoints con paths fijos
+  // ════════════════════════════════════════════════════════════
 
-  // Registrar pago (supervisor)
+  /**
+   * Sirve los bytes del comprobante. Decide entre local y Drive según
+   * el storage_provider del voucher.
+   *
+   * Funciona igual que /readings/meter-image/:id/content pero para
+   * comprobantes de pago.
+   */
+  @Get('voucher/:id/content')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Sirve los bytes del comprobante (local o Drive)' })
+  async getVoucherContent(
+    @Param('id') id: string,
+    @Response({ passthrough: false }) reply: any,
+  ) {
+    const voucher = await this.svc.getVoucherById(id);
+    if (!voucher) throw new NotFoundException('Comprobante no encontrado');
+
+    // ─── Caso 1: archivo local ──
+    if (voucher.storageProvider === 'local' && voucher.filepath) {
+      if (!fs.existsSync(voucher.filepath)) {
+        this.logger.warn(`Archivo local no existe: ${voucher.filepath}`);
+        throw new NotFoundException('Archivo no disponible en el servidor');
+      }
+      const buffer = fs.readFileSync(voucher.filepath);
+      const contentType = voucher.mimeType || this.guessMimeType(voucher.filename);
+      reply
+        .header('content-type', contentType)
+        .header('cache-control', 'private, max-age=3600')
+        .header('content-disposition', `inline; filename="${voucher.filename}"`)
+        .send(buffer);
+      return;
+    }
+
+    // ─── Caso 2: archivo en Drive ──
+    if (voucher.storageProvider === 'google_drive') {
+      const ctx = await this.svc.resolveOrgIdForVoucher(id);
+      if (!ctx) throw new NotFoundException('No se pudo resolver el contexto');
+
+      const fileId = await this.svc.getGatewayFileId(id);
+      if (!fileId) throw new NotFoundException('Comprobante sin file_id en el gateway');
+
+      try {
+        const file = await this.storageGateway.downloadFileBytes(fileId, ctx.idGrupo);
+        reply
+          .header('content-type', file.contentType)
+          .header('cache-control', 'private, max-age=3600')
+          .header('content-disposition', `inline; filename="${file.fileName || voucher.filename}"`)
+          .send(file.buffer);
+        return;
+      } catch (err: any) {
+        this.logger.error(`Error sirviendo voucher ${id} desde Drive: ${err.message}`);
+        // Fallback al archivo local si todavía existe
+        if (voucher.filepath && fs.existsSync(voucher.filepath)) {
+          const buffer = fs.readFileSync(voucher.filepath);
+          reply
+            .header('content-type', voucher.mimeType || 'image/jpeg')
+            .send(buffer);
+          return;
+        }
+        throw new NotFoundException('No se pudo cargar el comprobante');
+      }
+    }
+
+    throw new NotFoundException('Comprobante no disponible');
+  }
+
+  // ════════════════════════════════════════════════════════════
+  //  POST
+  // ════════════════════════════════════════════════════════════
+
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Registrar pago de una cuota' })
   create(@Body() dto: CreatePaymentDto) {
     return this.svc.create(dto);
   }
 
-  // Propietario registra pago → queda pendiente_aprobacion
   @Post('propietario')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.PROPIETARIO)
   @ApiOperation({ summary: 'Propietario registra pago (queda pendiente de aprobación)' })
   createPropietario(@Body() dto: CreatePagoAutoDto, @Request() req) {
-    // idPropietario puede ser null si el usuario no tiene propietario vinculado;
-    // en ese caso lo guardamos como null (el campo es nullable en BD).
-    // NUNCA usar req.user.id como fallback — es un UUID de "users", no de "propietarios",
-    // y viola la foreign key constraint "pagos_id_propietario_fkey".
     const idPropietario = req.user.idPropietario ?? null;
     return this.svc.createPropietario(dto, idPropietario);
   }
 
-  // ── Rutas con :id AL FINAL ────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  //  Rutas con :id AL FINAL
+  // ════════════════════════════════════════════════════════════
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Ver pago' })
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
   }
 
-  // Subir comprobante base64
+  /**
+   * Sube un comprobante (base64) para un pago.
+   *
+   * Crea un voucher en payment_vouchers, intenta subir al Drive,
+   * actualiza pagos.comprobante_url (legacy).
+   *
+   * Roles: supervisor o propietario.
+   */
   @Post(':id/comprobante')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.PROPIETARIO)
   @ApiOperation({ summary: 'Subir imagen de comprobante en base64' })
   @ApiBody({
@@ -134,27 +239,44 @@ export class PaymentsController {
   async uploadComprobante(
     @Param('id') id: string,
     @Body() body: { base64: string; filename: string },
+    @Request() req,
   ) {
-    const filepath = this.imageUpload.saveBase64(
-      body.base64, body.filename, `comprobante_${id}`, { subdir: 'comprobantes' },
-    );
-    // Convertir path del filesystem a URL relativa para servir estáticamente
-    // './uploads/comprobantes/file.jpg' → '/uploads/comprobantes/file.jpg'
-    const urlPath = '/' + filepath.replace(/^\.?\//, '').replace(/\\/g, '/');
-    return this.svc.updateComprobanteUrl(id, urlPath);
+    const voucher = await this.svc.uploadVoucher({
+      paymentId:  id,
+      base64:     body.base64,
+      filename:   body.filename,
+      uploadedBy: req.user.id,
+    });
+    return {
+      voucherId:       voucher.id,
+      storageProvider: voucher.storageProvider,
+      filename:        voucher.filename,
+    };
   }
 
-  // Supervisor aprueba pago pendiente
   @Patch(':id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Supervisor aprueba un pago pendiente' })
   approve(@Param('id') id: string, @Request() req) {
     return this.svc.approvePayment(id, req.user.id);
   }
 
-  // Supervisor rechaza pago pendiente
   @Patch(':id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.GESTION)
   @ApiOperation({ summary: 'Supervisor rechaza un pago pendiente' })
   reject(@Param('id') id: string, @Request() req) {
     return this.svc.rejectPayment(id, req.user.id);
+  }
+
+  // ── Helpers ──
+
+  private guessMimeType(filename: string): string {
+    const ext = (filename || '').toLowerCase().split('.').pop() || '';
+    if (ext === 'png')  return 'image/png';
+    if (ext === 'webp') return 'image/webp';
+    if (ext === 'gif')  return 'image/gif';
+    return 'image/jpeg';
   }
 }

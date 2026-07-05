@@ -23,8 +23,25 @@ import { AlicuotasModule } from './alicuotas/alicuotas.module';
 import { PaisesModule } from './paises/paises.module';
 import { MailModule } from './mail/mail.module';
 import { NotificacionConfigModule } from './notificacion-config/notificacion-config.module';
-import { SchedulerModule } from './scheduler/scheduler.module';
 import { NotificacionTipoModule } from './notificacion-tipo/notificacion-tipo.module';
+import { StorageGatewayModule } from './storage-gateway/storage-gateway.module';
+import { ReportsModule } from './reports/reports.module';
+
+/**
+ * NOTA ARQUITECTURAL — Cron jobs / Schedulers:
+ *
+ * Todos los cron jobs / procesos batch viven en el servicio `scheduler`
+ * (microservicio Node.js puro). El backend NestJS NO ejecuta cron jobs.
+ *
+ * Cuando el scheduler necesita disparar lógica del backend, lo hace
+ * vía HTTP a endpoints internos protegidos con `SchedulerTokenGuard`:
+ *
+ *   - POST /readings/housekeeping       (housekeeping fotos medidores)
+ *   - POST /reports/jobs/process-next   (procesa cola de reportes async)
+ *   - POST /reports/jobs/cleanup        (limpia reportes viejos)
+ *
+ * Esto evita duplicación de responsabilidades.
+ */
 @Module({
   imports: [
     TypeOrmModule.forRoot({
@@ -61,7 +78,8 @@ import { NotificacionTipoModule } from './notificacion-tipo/notificacion-tipo.mo
     PaisesModule,
     NotificacionConfigModule,
     NotificacionTipoModule,
-    SchedulerModule,
+    StorageGatewayModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}
