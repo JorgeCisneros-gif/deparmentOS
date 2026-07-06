@@ -33,7 +33,13 @@ __decorate([
     __metadata("design:type", String)
 ], CreateUserDto.prototype, "role", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'UUID del edificio (requerido para supervisor)' }),
+    (0, swagger_1.ApiPropertyOptional)({ description: 'UUID del grupo al que pertenece' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CreateUserDto.prototype, "idGrupo", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'UUID del edificio (opcional)' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsUUID)(),
     __metadata("design:type", String)
@@ -59,6 +65,12 @@ __decorate([
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], UpdateUserDto.prototype, "isActive", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateUserDto.prototype, "password", void 0);
 class ChangePasswordDto {
 }
 exports.ChangePasswordDto = ChangePasswordDto;

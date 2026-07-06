@@ -31,7 +31,7 @@ __decorate([
     __metadata("design:type", String)
 ], MeterImage.prototype, "filename", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'text' }),
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], MeterImage.prototype, "filepath", void 0);
 __decorate([
@@ -70,6 +70,34 @@ __decorate([
     (0, typeorm_1.CreateDateColumn)({ name: 'created_at' }),
     __metadata("design:type", Date)
 ], MeterImage.prototype, "createdAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'storage_provider', length: 20, default: 'local' }),
+    __metadata("design:type", String)
+], MeterImage.prototype, "storageProvider", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'gateway_file_id', length: 64, nullable: true }),
+    __metadata("design:type", String)
+], MeterImage.prototype, "gatewayFileId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'external_url', type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], MeterImage.prototype, "externalUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'gateway_uploaded_at', type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], MeterImage.prototype, "gatewayUploadedAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'gateway_last_error', type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], MeterImage.prototype, "gatewayLastError", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'gateway_attempts', type: 'smallint', default: 0 }),
+    __metadata("design:type", Number)
+], MeterImage.prototype, "gatewayAttempts", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'local_purgeable_at', type: 'timestamptz', nullable: true }),
+    __metadata("design:type", Date)
+], MeterImage.prototype, "localPurgeableAt", void 0);
 exports.MeterImage = MeterImage = __decorate([
     (0, typeorm_1.Entity)('meter_images')
 ], MeterImage);

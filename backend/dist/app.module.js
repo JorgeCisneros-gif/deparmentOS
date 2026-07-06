@@ -11,6 +11,9 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const auth_module_1 = require("./auth/auth.module");
 const users_module_1 = require("./users/users.module");
+const accounts_module_1 = require("./accounts/accounts.module");
+const grupos_module_1 = require("./grupos/grupos.module");
+const app_config_module_1 = require("./config/app-config.module");
 const buildings_module_1 = require("./buildings/buildings.module");
 const departments_module_1 = require("./departments/departments.module");
 const readings_module_1 = require("./readings/readings.module");
@@ -27,6 +30,10 @@ const gastos_module_1 = require("./gastos/gastos.module");
 const alicuotas_module_1 = require("./alicuotas/alicuotas.module");
 const paises_module_1 = require("./paises/paises.module");
 const mail_module_1 = require("./mail/mail.module");
+const notificacion_config_module_1 = require("./notificacion-config/notificacion-config.module");
+const notificacion_tipo_module_1 = require("./notificacion-tipo/notificacion-tipo.module");
+const storage_gateway_module_1 = require("./storage-gateway/storage-gateway.module");
+const reports_module_1 = require("./reports/reports.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -48,6 +55,9 @@ exports.AppModule = AppModule = __decorate([
             shared_module_1.SharedModule,
             auth_module_1.AuthModule,
             users_module_1.UsersModule,
+            accounts_module_1.AccountsModule,
+            grupos_module_1.GruposModule,
+            app_config_module_1.AppConfigModule,
             buildings_module_1.BuildingsModule,
             departments_module_1.DepartmentsModule,
             services_module_1.ServicesModule,
@@ -62,6 +72,10 @@ exports.AppModule = AppModule = __decorate([
             mail_module_1.MailModule,
             alicuotas_module_1.AlicuotasModule,
             paises_module_1.PaisesModule,
+            notificacion_config_module_1.NotificacionConfigModule,
+            notificacion_tipo_module_1.NotificacionTipoModule,
+            storage_gateway_module_1.StorageGatewayModule,
+            reports_module_1.ReportsModule,
         ],
     })
 ], AppModule);

@@ -2,13 +2,21 @@ import { PaymentsService } from './payments.service';
 import { CreatePagoAutoDto, CreatePaymentDto } from './payments.dto';
 import { ImageUploadService } from '../shared/image-upload.service';
 import { FeesService } from '../fees/fees.service';
+import { StorageGatewayService } from '../storage-gateway/storage-gateway.service';
 export declare class PaymentsController {
     private readonly svc;
     private readonly imageUpload;
     private readonly feesService;
-    constructor(svc: PaymentsService, imageUpload: ImageUploadService, feesService: FeesService);
+    private readonly storageGateway;
+    private readonly logger;
+    constructor(svc: PaymentsService, imageUpload: ImageUploadService, feesService: FeesService, storageGateway: StorageGatewayService);
+    housekeeping(): Promise<{
+        retried: number;
+        retriedOk: number;
+        purgedLocal: number;
+    }>;
     getMyFees(req: any, year?: number, month?: number): Promise<import("../fees/fee.entity").Fee[]>;
-    getPendingApproval(): Promise<import("./payment.entity").Payment[]>;
+    getPendingApproval(): Promise<any[]>;
     periodSummary(buildingId: string, month: number, year: number): Promise<{
         resumen: {
             totalDeptos: number;
@@ -23,6 +31,8 @@ export declare class PaymentsController {
             tipo: import("../services/service.entity").TipoServicio;
             nombre: string;
             activo: boolean;
+            modoCalculo: string;
+            unidadMedida: import("../services/service.entity").UnidadMedida;
         }[];
         departamentos: {
             feeId: string;
@@ -54,7 +64,9 @@ export declare class PaymentsController {
                 comprobanteUrl: string;
                 estadoPago: string;
                 aprobadoPor: string;
+                voucherId: string;
             }[];
+            medicionPorServicio: any;
             medicion: {
                 idMeterImage: any;
                 ocrValor: any;
@@ -66,13 +78,19 @@ export declare class PaymentsController {
     }>;
     pending(buildingId: string, month: number, year: number): Promise<any[]>;
     findAll(feeId?: string, ownerId?: string): Promise<import("./payment.entity").Payment[]>;
+    getVoucherContent(id: string, reply: any): Promise<void>;
     create(dto: CreatePaymentDto): Promise<import("./payment.entity").Payment>;
     createPropietario(dto: CreatePagoAutoDto, req: any): Promise<import("./payment.entity").Payment>;
     findOne(id: string): Promise<import("./payment.entity").Payment>;
     uploadComprobante(id: string, body: {
         base64: string;
         filename: string;
-    }): Promise<import("./payment.entity").Payment>;
+    }, req: any): Promise<{
+        voucherId: string;
+        storageProvider: import("./payment-voucher.entity").StorageProvider;
+        filename: string;
+    }>;
     approve(id: string, req: any): Promise<import("./payment.entity").Payment>;
     reject(id: string, req: any): Promise<import("./payment.entity").Payment>;
+    private guessMimeType;
 }

@@ -1,6 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as fs from 'fs';
-import * as FormData from 'form-data';
+import FormData = require('form-data');
 import axios, { AxiosError } from 'axios';
 
 export interface OcrResult {

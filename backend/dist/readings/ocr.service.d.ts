@@ -8,6 +8,8 @@ export interface OcrResult {
 export declare class OcrService {
     private readonly logger;
     private get ocrEndpoint();
+    readMeterFromBuffer(buffer: Buffer, filename?: string): Promise<OcrResult>;
     readMeter(imagePath: string): Promise<OcrResult>;
+    private callOcrEndpoint;
     private parseReading;
 }

@@ -107,6 +107,16 @@ __decorate([
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], CreateReceiptDto.prototype, "factorAjuste", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'Estado del factor de ajuste',
+        enum: ['pendiente', 'estimado', 'calculado'],
+        example: 'estimado',
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(['pendiente', 'estimado', 'calculado']),
+    __metadata("design:type", String)
+], CreateReceiptDto.prototype, "factorEstado", void 0);
 class UpdateReceiptDto extends (0, swagger_1.PartialType)(CreateReceiptDto) {
 }
 exports.UpdateReceiptDto = UpdateReceiptDto;

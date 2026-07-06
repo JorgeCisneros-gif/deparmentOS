@@ -58,7 +58,7 @@ let FeesController = class FeesController {
 exports.FeesController = FeesController;
 __decorate([
     (0, common_1.Post)('calculate'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({
         summary: 'Calcular cuotas del período para todos los deptos del edificio',
         description: `
@@ -91,7 +91,7 @@ __decorate([
 ], FeesController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)('pending'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Resumen de cuotas pendientes del mes por edificio' }),
     (0, swagger_1.ApiQuery)({ name: 'buildingId', required: true }),
     (0, swagger_1.ApiQuery)({ name: 'month', required: true, type: Number }),
@@ -114,7 +114,7 @@ __decorate([
 ], FeesController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Patch)(':id/status'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Actualizar estado de pago de una cuota' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -124,7 +124,7 @@ __decorate([
 ], FeesController.prototype, "updateStatus", null);
 __decorate([
     (0, common_1.Get)('period-vencimiento'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Obtener fecha de vencimiento actual de las cuotas del período' }),
     (0, swagger_1.ApiQuery)({ name: 'buildingId', required: true }),
     (0, swagger_1.ApiQuery)({ name: 'month', required: true, type: Number }),
@@ -138,7 +138,7 @@ __decorate([
 ], FeesController.prototype, "getPeriodVencimiento", null);
 __decorate([
     (0, common_1.Patch)('period-vencimiento'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Actualizar fecha de vencimiento para todas las cuotas del período' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),

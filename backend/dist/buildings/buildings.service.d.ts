@@ -6,6 +6,8 @@ export declare class BuildingsService {
     constructor(repo: Repository<Building>);
     create(dto: CreateBuildingDto): Promise<Building>;
     findAll(): Promise<Building[]>;
+    findByGrupo(idGrupo?: string): any[] | Promise<Building[]>;
+    findByAccount(idAccount?: string): Promise<Building[]>;
     findOne(id: string): Promise<Building>;
     update(id: string, dto: UpdateBuildingDto): Promise<Building>;
     remove(id: string): Promise<{

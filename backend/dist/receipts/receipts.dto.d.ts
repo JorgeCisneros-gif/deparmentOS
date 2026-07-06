@@ -14,6 +14,7 @@ export declare class CreateReceiptDto {
     totalUnidadesFactura?: number;
     m3Propios?: number;
     factorAjuste?: number;
+    factorEstado?: string;
 }
 declare const UpdateReceiptDto_base: import("@nestjs/common").Type<Partial<CreateReceiptDto>>;
 export declare class UpdateReceiptDto extends UpdateReceiptDto_base {

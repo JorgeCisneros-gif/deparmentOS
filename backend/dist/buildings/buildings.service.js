@@ -25,12 +25,32 @@ let BuildingsService = class BuildingsService {
         return this.repo.save(this.repo.create(dto));
     }
     findAll() {
-        return this.repo.find({ order: { nombre: 'ASC' } });
+        return this.repo.find({
+            order: { nombre: 'ASC' },
+            relations: ['grupo'],
+        });
+    }
+    findByGrupo(idGrupo) {
+        if (!idGrupo)
+            return [];
+        return this.repo.find({
+            where: { idGrupo },
+            order: { nombre: 'ASC' },
+            relations: ['grupo'],
+        });
+    }
+    findByAccount(idAccount) {
+        if (!idAccount)
+            return this.findAll();
+        return this.repo.find({
+            where: { idAccount },
+            order: { nombre: 'ASC' },
+        });
     }
     async findOne(id) {
         const b = await this.repo.findOne({
             where: { id },
-            relations: ['departamentos', 'servicios'],
+            relations: ['departamentos', 'servicios', 'grupo'],
         });
         if (!b)
             throw new common_1.NotFoundException('Edificio no encontrado');

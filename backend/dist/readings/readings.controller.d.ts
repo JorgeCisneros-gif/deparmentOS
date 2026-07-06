@@ -1,5 +1,5 @@
 import { ReadingsService } from './readings.service';
-import { CreateReadingDto, UpdateReadingDto, ConfirmOcrReadingDto } from './readings.dto';
+import { CreateReadingDto, UpdateReadingDto } from './readings.dto';
 export declare class ReadingsController {
     private readonly svc;
     constructor(svc: ReadingsService);
@@ -13,20 +13,23 @@ export declare class ReadingsController {
     getMeterImage(id: string): Promise<{
         id: string;
         filename: string;
-        filepath: string;
+        storageProvider: "local" | "google_drive";
+        externalUrl: string | null;
+        filepath?: string | null;
     }>;
     findOne(id: string): Promise<import("./reading.entity").Reading>;
     update(id: string, dto: UpdateReadingDto): Promise<import("./reading.entity").Reading>;
     uploadOcr(req: any): Promise<{
-        meterImageId: string;
-        ocrResult: any;
+        sessionId: string;
+        ocrResult: import("./ocr.service").OcrResult;
         message: string;
         siguientePaso: string;
     }>;
-    confirmOcr(body: {
-        meterImageId: string;
-    } & ConfirmOcrReadingDto, req: any): Promise<import("./reading.entity").Reading>;
+    confirmOcr(body: any, req: any): Promise<import("./reading.entity").Reading>;
     housekeeping(): Promise<{
-        deleted: number;
+        retried: number;
+        retriedOk: number;
+        purgedLocal: number;
+        expiredDeleted: number;
     }>;
 }

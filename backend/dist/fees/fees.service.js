@@ -165,9 +165,8 @@ let FeesService = FeesService_1 = class FeesService {
                 }
                 const factor = parseFloat(recibo.factorAjuste) || 1;
                 const factorEstado = recibo.factorEstado || 'pendiente';
-                if (factorEstado === 'pendiente') {
-                    this.logger.warn(`Factor de ajuste pendiente para recibo ${recibo.id} — usando factor 1.0`);
-                    return parseFloat((m3 * precioReal).toFixed(2));
+                if (factorEstado === 'pendiente' && factor === 1) {
+                    this.logger.warn(`Factor de ajuste pendiente para recibo ${recibo.id} — usando factor 1.0 (sin ajuste)`);
                 }
                 return parseFloat((m3 * precioReal * factor).toFixed(2));
             }

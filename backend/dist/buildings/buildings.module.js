@@ -12,14 +12,20 @@ const typeorm_1 = require("@nestjs/typeorm");
 const building_entity_1 = require("./building.entity");
 const buildings_service_1 = require("./buildings.service");
 const buildings_controller_1 = require("./buildings.controller");
+const accounts_module_1 = require("../accounts/accounts.module");
+const grupos_module_1 = require("../grupos/grupos.module");
 let BuildingsModule = class BuildingsModule {
 };
 exports.BuildingsModule = BuildingsModule;
 exports.BuildingsModule = BuildingsModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([building_entity_1.Building])],
-        providers: [buildings_service_1.BuildingsService],
+        imports: [
+            typeorm_1.TypeOrmModule.forFeature([building_entity_1.Building]),
+            accounts_module_1.AccountsModule,
+            grupos_module_1.GruposModule,
+        ],
         controllers: [buildings_controller_1.BuildingsController],
+        providers: [buildings_service_1.BuildingsService],
         exports: [buildings_service_1.BuildingsService],
     })
 ], BuildingsModule);
