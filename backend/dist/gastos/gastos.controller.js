@@ -138,7 +138,7 @@ __decorate([
 ], GastosController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Crear nuevo gasto extra' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -147,7 +147,7 @@ __decorate([
 ], GastosController.prototype, "create", null);
 __decorate([
     (0, common_1.Patch)(':id'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Editar gasto extra' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -157,7 +157,7 @@ __decorate([
 ], GastosController.prototype, "update", null);
 __decorate([
     (0, common_1.Patch)(':id/cerrar'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Cerrar un gasto' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -166,7 +166,7 @@ __decorate([
 ], GastosController.prototype, "cerrar", null);
 __decorate([
     (0, common_1.Patch)(':id/anular'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Anular un gasto' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -183,7 +183,7 @@ __decorate([
 ], GastosController.prototype, "getPagos", null);
 __decorate([
     (0, common_1.Post)('pagos'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Registrar pago de gasto extra' }),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -192,7 +192,7 @@ __decorate([
 ], GastosController.prototype, "registrarPago", null);
 __decorate([
     (0, common_1.Delete)('pagos/:id'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Eliminar un pago de gasto extra' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -201,7 +201,7 @@ __decorate([
 ], GastosController.prototype, "deletePago", null);
 __decorate([
     (0, common_1.Post)('pagos/:id/comprobante'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),

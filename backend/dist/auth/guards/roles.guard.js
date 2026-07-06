@@ -26,11 +26,20 @@ let RolesGuard = class RolesGuard {
         if (!requiredRoles || requiredRoles.length === 0)
             return true;
         const { user } = context.switchToHttp().getRequest();
-        const effectiveRoles = [...requiredRoles];
-        if (requiredRoles.includes(user_entity_1.UserRole.SUPERVISOR)) {
-            effectiveRoles.push(user_entity_1.UserRole.ADMINISTRADOR);
+        const effectiveRoles = new Set(requiredRoles);
+        if (requiredRoles.includes(user_entity_1.UserRole.ADMINISTRADOR)) {
+            effectiveRoles.add(user_entity_1.UserRole.SUPERVISOR);
         }
-        const hasRole = effectiveRoles.includes(user?.role);
+        if (requiredRoles.includes(user_entity_1.UserRole.GESTION)) {
+            effectiveRoles.add(user_entity_1.UserRole.SUPERVISOR);
+            effectiveRoles.add(user_entity_1.UserRole.ADMINISTRADOR);
+        }
+        if (requiredRoles.includes(user_entity_1.UserRole.PROPIETARIO)) {
+            effectiveRoles.add(user_entity_1.UserRole.SUPERVISOR);
+            effectiveRoles.add(user_entity_1.UserRole.ADMINISTRADOR);
+            effectiveRoles.add(user_entity_1.UserRole.GESTION);
+        }
+        const hasRole = effectiveRoles.has(user?.role);
         if (!hasRole) {
             throw new common_1.ForbiddenException(`Acceso denegado. Se requiere rol: ${requiredRoles.join(' o ')}`);
         }

@@ -51,7 +51,7 @@ let TemplateController = class TemplateController {
 exports.TemplateController = TemplateController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.ADMINISTRADOR),
     (0, swagger_1.ApiOperation)({
         summary: 'Crear plantilla de mensaje personalizada',
         description: `
@@ -117,7 +117,7 @@ __decorate([
 ], TemplateController.prototype, "preview", null);
 __decorate([
     (0, common_1.Patch)(':id'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.ADMINISTRADOR),
     (0, swagger_1.ApiOperation)({ summary: 'Actualizar plantilla' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -127,7 +127,7 @@ __decorate([
 ], TemplateController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.ADMINISTRADOR),
     (0, swagger_1.ApiOperation)({ summary: 'Desactivar plantilla' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -136,7 +136,7 @@ __decorate([
 ], TemplateController.prototype, "deactivate", null);
 __decorate([
     (0, common_1.Post)('render/one'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.ADMINISTRADOR),
     (0, swagger_1.ApiOperation)({
         summary: '📱 Renderizar mensaje para un destinatario',
         description: `
@@ -160,7 +160,7 @@ Para variables personalizadas adicionales usar \`variablesExtra\`:
 ], TemplateController.prototype, "renderOne", null);
 __decorate([
     (0, common_1.Post)('render/all'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.ADMINISTRADOR),
     (0, swagger_1.ApiOperation)({
         summary: '📱 Renderizar mensaje para TODOS los deptos del edificio',
         description: `

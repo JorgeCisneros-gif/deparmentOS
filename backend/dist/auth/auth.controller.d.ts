@@ -10,9 +10,12 @@ export declare class AuthController {
             id: string;
             email: string;
             role: import("../users/user.entity").UserRole;
+            idGrupo: string;
             idEdificio: string;
             idDepartamento: string;
+            idPropietario: string;
         };
+        config: Record<string, any>;
     }>;
     refresh(dto: RefreshTokenDto): Promise<{
         accessToken: string;

@@ -14,6 +14,7 @@ const typeorm_1 = require("typeorm");
 const department_entity_1 = require("../departments/department.entity");
 const service_entity_1 = require("../services/service.entity");
 const pais_entity_1 = require("../paises/pais.entity");
+const grupo_entity_1 = require("../grupos/grupo.entity");
 let Building = class Building {
 };
 exports.Building = Building;
@@ -71,11 +72,24 @@ __decorate([
     __metadata("design:type", String)
 ], Building.prototype, "locale", void 0);
 __decorate([
-    (0, typeorm_1.OneToMany)(() => department_entity_1.Department, (d) => d.edificio),
+    (0, typeorm_1.Column)({ name: 'id_account', nullable: true }),
+    __metadata("design:type", String)
+], Building.prototype, "idAccount", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ name: 'id_grupo', nullable: true }),
+    __metadata("design:type", String)
+], Building.prototype, "idGrupo", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => grupo_entity_1.Grupo, g => g.edificios, { nullable: true, eager: false }),
+    (0, typeorm_1.JoinColumn)({ name: 'id_grupo' }),
+    __metadata("design:type", grupo_entity_1.Grupo)
+], Building.prototype, "grupo", void 0);
+__decorate([
+    (0, typeorm_1.OneToMany)(() => department_entity_1.Department, d => d.edificio),
     __metadata("design:type", Array)
 ], Building.prototype, "departamentos", void 0);
 __decorate([
-    (0, typeorm_1.OneToMany)(() => service_entity_1.Service, (s) => s.edificio),
+    (0, typeorm_1.OneToMany)(() => service_entity_1.Service, s => s.edificio),
     __metadata("design:type", Array)
 ], Building.prototype, "servicios", void 0);
 __decorate([

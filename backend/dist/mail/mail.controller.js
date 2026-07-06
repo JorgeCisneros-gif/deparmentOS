@@ -144,7 +144,7 @@ exports.MailController = MailController = __decorate([
     (0, swagger_1.ApiTags)('Mail'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, common_1.Controller)('mail'),
     __metadata("design:paramtypes", [mail_service_1.MailService])
 ], MailController);

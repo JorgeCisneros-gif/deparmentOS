@@ -79,7 +79,8 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], PropietariosController.prototype, "update", null);
 __decorate([
-    (0, common_1.Delete)(':id'),
+    (0, common_1.Patch)(':id/deactivate'),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
     (0, swagger_1.ApiOperation)({ summary: 'Desactivar propietario' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -90,7 +91,7 @@ exports.PropietariosController = PropietariosController = __decorate([
     (0, swagger_1.ApiTags)('Propietarios'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.ADMINISTRADOR),
     (0, common_1.Controller)('propietarios'),
     __metadata("design:paramtypes", [propietarios_service_1.PropietariosService])
 ], PropietariosController);

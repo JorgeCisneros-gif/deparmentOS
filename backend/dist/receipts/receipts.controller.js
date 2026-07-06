@@ -111,7 +111,7 @@ let ReceiptsController = class ReceiptsController {
 exports.ReceiptsController = ReceiptsController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [receipts_dto_1.CreateReceiptDto]),
@@ -135,7 +135,7 @@ __decorate([
 ], ReceiptsController.prototype, "recalcularFactor", null);
 __decorate([
     (0, common_1.Patch)(':id'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -144,7 +144,7 @@ __decorate([
 ], ReceiptsController.prototype, "update", null);
 __decorate([
     (0, common_1.Get)('validate-period'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiQuery)({ name: 'buildingId', required: true }),
     (0, swagger_1.ApiQuery)({ name: 'month', required: true, type: Number }),
     (0, swagger_1.ApiQuery)({ name: 'year', required: true, type: Number }),
@@ -157,7 +157,7 @@ __decorate([
 ], ReceiptsController.prototype, "validatePeriod", null);
 __decorate([
     (0, common_1.Get)('period'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiQuery)({ name: 'buildingId', required: true }),
     (0, swagger_1.ApiQuery)({ name: 'month', required: true, type: Number }),
     (0, swagger_1.ApiQuery)({ name: 'year', required: true, type: Number }),

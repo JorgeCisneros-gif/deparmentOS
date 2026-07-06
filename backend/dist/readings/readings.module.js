@@ -14,6 +14,7 @@ const meter_image_entity_1 = require("./meter-image.entity");
 const readings_service_1 = require("./readings.service");
 const readings_controller_1 = require("./readings.controller");
 const ocr_service_1 = require("./ocr.service");
+const ocr_session_cache_1 = require("./ocr-session.cache");
 const receipts_module_1 = require("../receipts/receipts.module");
 const departments_module_1 = require("../departments/departments.module");
 let ReadingsModule = class ReadingsModule {
@@ -26,7 +27,7 @@ exports.ReadingsModule = ReadingsModule = __decorate([
             receipts_module_1.ReceiptsModule,
             departments_module_1.DepartmentsModule,
         ],
-        providers: [readings_service_1.ReadingsService, ocr_service_1.OcrService],
+        providers: [readings_service_1.ReadingsService, ocr_service_1.OcrService, ocr_session_cache_1.OcrSessionCache],
         controllers: [readings_controller_1.ReadingsController],
         exports: [readings_service_1.ReadingsService],
     })

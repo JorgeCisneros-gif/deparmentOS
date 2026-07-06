@@ -1,6 +1,7 @@
 import { Department } from '../departments/department.entity';
 import { Service } from '../services/service.entity';
 import { Pais } from '../paises/pais.entity';
+import { Grupo } from '../grupos/grupo.entity';
 export declare class Building {
     id: string;
     nombre: string;
@@ -14,6 +15,9 @@ export declare class Building {
     pais: Pais;
     moneda: string;
     locale: string;
+    idAccount: string | null;
+    idGrupo: string | null;
+    grupo: Grupo;
     departamentos: Department[];
     servicios: Service[];
     createdAt: Date;

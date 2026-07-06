@@ -19,6 +19,7 @@ const readings_service_1 = require("./readings.service");
 const readings_dto_1 = require("./readings.dto");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 const roles_guard_1 = require("../auth/guards/roles.guard");
+const scheduler_token_guard_1 = require("../auth/guards/scheduler-token.guard");
 const roles_decorator_1 = require("../auth/decorators/roles.decorator");
 const user_entity_1 = require("../users/user.entity");
 let ReadingsController = class ReadingsController {
@@ -88,11 +89,20 @@ let ReadingsController = class ReadingsController {
         if (!allowed.includes(mimeType.toLowerCase())) {
             throw new common_1.BadRequestException('Solo se aceptan imágenes JPG, PNG o WEBP');
         }
-        return this.svc.processOcrImage(fileBuffer, originalName, fileSizeKb, departamentoId, reciboId, req.user.id, originalBuffer ?? undefined);
+        return this.svc.processOcrImage(fileBuffer, originalName, fileSizeKb, mimeType, departamentoId, reciboId, req.user.id, originalBuffer ?? undefined);
     }
     confirmOcr(body, req) {
-        const { meterImageId, ...dto } = body;
-        return this.svc.confirmOcr(meterImageId, dto, req.user.id);
+        if (!body || typeof body !== 'object') {
+            throw new common_1.BadRequestException('El cuerpo de la petición es requerido y debe ser JSON.');
+        }
+        const { sessionId, meterImageId, ...dto } = body;
+        if (!dto.idRecibo || !dto.idDepartamento) {
+            throw new common_1.BadRequestException('idRecibo e idDepartamento son requeridos');
+        }
+        if (dto.lecturaFinal === undefined || dto.lecturaAnterior === undefined) {
+            throw new common_1.BadRequestException('lecturaFinal y lecturaAnterior son requeridos');
+        }
+        return this.svc.confirmOcr({ sessionId, meterImageId }, dto, req.user.id);
     }
     housekeeping() {
         return this.svc.runHousekeeping();
@@ -101,7 +111,8 @@ let ReadingsController = class ReadingsController {
 exports.ReadingsController = ReadingsController;
 __decorate([
     (0, common_1.Post)(),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Registrar medición manual' }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -110,6 +121,7 @@ __decorate([
 ], ReadingsController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Listar mediciones' }),
     (0, swagger_1.ApiQuery)({ name: 'receiptId', required: false }),
     (0, swagger_1.ApiQuery)({ name: 'deptId', required: false }),
@@ -121,6 +133,7 @@ __decorate([
 ], ReadingsController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)('history/:deptId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Historial de consumo de agua de un departamento' }),
     __param(0, (0, common_1.Param)('deptId')),
     __param(1, (0, common_1.Request)()),
@@ -130,6 +143,7 @@ __decorate([
 ], ReadingsController.prototype, "getHistory", null);
 __decorate([
     (0, common_1.Get)('meter-image/:id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Obtener filename de imagen de medidor por su ID' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -138,6 +152,7 @@ __decorate([
 ], ReadingsController.prototype, "getMeterImage", null);
 __decorate([
     (0, common_1.Get)(':id'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, swagger_1.ApiOperation)({ summary: 'Ver medición' }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -146,7 +161,8 @@ __decorate([
 ], ReadingsController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Patch)(':id'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiOperation)({ summary: 'Corregir medición' }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -156,9 +172,14 @@ __decorate([
 ], ReadingsController.prototype, "update", null);
 __decorate([
     (0, common_1.Post)('ocr'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
     (0, swagger_1.ApiConsumes)('multipart/form-data'),
-    (0, swagger_1.ApiOperation)({ summary: '📸 Subir foto del medidor → OCR automático' }),
+    (0, swagger_1.ApiOperation)({
+        summary: '📸 Subir foto del medidor → OCR automático',
+        description: 'Procesa OCR pero NO persiste la imagen todavía. Devuelve un sessionId ' +
+            'temporal (30 min) que debe usarse en POST /readings/confirm-ocr.',
+    }),
     (0, swagger_1.ApiBody)({
         schema: {
             type: 'object',
@@ -166,8 +187,8 @@ __decorate([
             properties: {
                 departamentoId: { type: 'string', format: 'uuid' },
                 reciboId: { type: 'string', format: 'uuid' },
-                image: { type: 'string', format: 'binary', description: 'Imagen procesada para OCR' },
-                original: { type: 'string', format: 'binary', description: 'Imagen original para guardar (opcional)' },
+                image: { type: 'string', format: 'binary' },
+                original: { type: 'string', format: 'binary' },
             },
         },
     }),
@@ -178,8 +199,11 @@ __decorate([
 ], ReadingsController.prototype, "uploadOcr", null);
 __decorate([
     (0, common_1.Post)('confirm-ocr'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
-    (0, swagger_1.ApiOperation)({ summary: '✅ Confirmar lectura OCR y guardar medición' }),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
+    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.GESTION),
+    (0, swagger_1.ApiOperation)({
+        summary: '✅ Confirmar lectura OCR y guardar medición',
+    }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
@@ -188,8 +212,17 @@ __decorate([
 ], ReadingsController.prototype, "confirmOcr", null);
 __decorate([
     (0, common_1.Post)('housekeeping'),
-    (0, roles_decorator_1.Roles)(user_entity_1.UserRole.SUPERVISOR),
-    (0, swagger_1.ApiOperation)({ summary: 'Eliminar imágenes de medidores vencidas' }),
+    (0, common_1.UseGuards)(scheduler_token_guard_1.SchedulerTokenGuard),
+    (0, swagger_1.ApiOperation)({
+        summary: '🧹 Housekeeping de fotos de medidores [Solo scheduler]',
+        description: 'Endpoint interno disparado por el servicio scheduler.\n\n' +
+            'Realiza:\n' +
+            '1. Reintenta uploads pendientes al Storage Gateway\n' +
+            '2. Borra archivos locales que ya están confirmados en Drive\n' +
+            '3. Expira fotos locales viejas (legacy)\n\n' +
+            'Autenticación: header `Authorization: Bearer <SCHEDULER_API_TOKEN>` ' +
+            'o `x-scheduler-token: <SCHEDULER_API_TOKEN>`.',
+    }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
@@ -197,7 +230,6 @@ __decorate([
 exports.ReadingsController = ReadingsController = __decorate([
     (0, swagger_1.ApiTags)('Readings'),
     (0, swagger_1.ApiBearerAuth)('access-token'),
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, roles_guard_1.RolesGuard),
     (0, common_1.Controller)('readings'),
     __metadata("design:paramtypes", [readings_service_1.ReadingsService])
 ], ReadingsController);

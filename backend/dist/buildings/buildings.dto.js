@@ -55,6 +55,12 @@ __decorate([
     (0, class_validator_1.IsObject)(),
     __metadata("design:type", Object)
 ], CreateBuildingDto.prototype, "serviciosActivos", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ description: 'UUID del grupo al que pertenece el edificio' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CreateBuildingDto.prototype, "idGrupo", void 0);
 class UpdateBuildingDto extends (0, swagger_1.PartialType)(CreateBuildingDto) {
 }
 exports.UpdateBuildingDto = UpdateBuildingDto;

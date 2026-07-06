@@ -2,7 +2,7 @@ import {
   Injectable, Logger, BadGatewayException, ServiceUnavailableException,
 } from '@nestjs/common';
 import axios, { AxiosError, AxiosInstance } from 'axios';
-import * as FormData from 'form-data';
+import FormData = require('form-data');
 import {
   APP_SOURCE,
   ProviderStatus,
